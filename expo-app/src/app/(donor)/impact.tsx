@@ -1,0 +1,197 @@
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, Modal, Pressable } from 'react-native';
+import { colors, typography, spacing, radius, shadows } from '../../constants/theme';
+import { Button } from '../../components/ui/Button';
+import { X, ShareNetwork } from 'phosphor-react-native';
+
+export default function DonorImpactScreen() {
+  const [shareVisible, setShareVisible] = useState(false);
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <Text style={styles.pageTitle}>FoodPrint</Text>
+
+        <View style={styles.heroSection}>
+          <Text style={styles.heroLabel}>Total food rescued</Text>
+          <Text style={styles.heroNumber}>
+            124<Text style={styles.heroUnit}> kg</Text>
+          </Text>
+        </View>
+
+        <View style={styles.grid}>
+          <View style={[styles.gridItem, { flex: 1.4 }]}>
+            <Text style={styles.gridLabel}>Meals enabled</Text>
+            <Text style={styles.gridValue}>372</Text>
+          </View>
+          <View style={[styles.gridItem, { flex: 1 }]}>
+            <Text style={styles.gridLabel}>Days active</Text>
+            <Text style={styles.gridValue}>42</Text>
+          </View>
+          <View style={[styles.gridItem, { flex: 1 }]}>
+            <Text style={styles.gridLabel}>Partners</Text>
+            <Text style={styles.gridValue}>8</Text>
+          </View>
+        </View>
+
+        <View style={{ marginTop: spacing.s40 }}>
+          <Button variant="outline" label="Share milestone" onPress={() => setShareVisible(true)} />
+        </View>
+      </ScrollView>
+
+      {/* Share Milestone graphics card modal */}
+      <Modal visible={shareVisible} transparent animationType="slide">
+        <View style={styles.modalScrim}>
+          <View style={styles.shareCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Share Milestone</Text>
+              <Pressable onPress={() => setShareVisible(false)}>
+                <X color={colors.neutral900} size={24} />
+              </Pressable>
+            </View>
+
+            {/* Simulated milestone design graphic */}
+            <View style={styles.milestoneGraphic}>
+              <View style={styles.milestoneCircle}>
+                <ShareNetwork color={colors.white} size={28} weight="bold" />
+              </View>
+              <Text style={styles.graphicTitle}>124 KG RESCUED</Text>
+              <Text style={styles.graphicSub}>I've rescued 124 kg of surplus food and enabled 372 meals using FoodLoop!</Text>
+              <View style={styles.graphicLogo}>
+                <Text style={styles.graphicLogoText}>FoodLoop</Text>
+              </View>
+            </View>
+
+            <Button label="Share Image" onPress={() => setShareVisible(false)} />
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.neutral0,
+  },
+  content: {
+    padding: spacing.screenHorizontal,
+    paddingTop: 40,
+    paddingBottom: 40,
+  },
+  pageTitle: {
+    fontFamily: typography.fonts.bold,
+    fontSize: typography.size.xl.fontSize,
+    color: colors.neutral900,
+    marginBottom: spacing.s32,
+    letterSpacing: -0.5,
+  },
+  heroSection: {
+    marginBottom: spacing.s40,
+  },
+  heroLabel: {
+    fontFamily: typography.fonts.medium,
+    fontSize: typography.size.sm.fontSize,
+    color: colors.neutral600,
+    marginBottom: 8,
+  },
+  heroNumber: {
+    fontFamily: typography.fonts.extraBold,
+    fontSize: typography.size.xxxl.fontSize,
+    color: colors.blue500,
+    letterSpacing: -1,
+    lineHeight: typography.size.xxxl.lineHeight,
+  },
+  heroUnit: {
+    fontSize: typography.size.xxl.fontSize,
+    fontFamily: typography.fonts.semiBold,
+    color: colors.blue400,
+  },
+  grid: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  gridItem: {
+    backgroundColor: colors.blue100,
+    padding: 16,
+    borderRadius: radius.card,
+  },
+  gridLabel: {
+    fontFamily: typography.fonts.medium,
+    fontSize: typography.size.xs.fontSize,
+    color: colors.neutral600,
+    marginBottom: 8,
+  },
+  gridValue: {
+    fontFamily: typography.fonts.bold,
+    fontSize: typography.size.xl.fontSize,
+    color: colors.neutral900,
+    letterSpacing: -0.5,
+  },
+  modalScrim: {
+    flex: 1,
+    backgroundColor: 'rgba(26,43,60,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  shareCard: {
+    width: '100%',
+    backgroundColor: colors.white,
+    borderRadius: radius.card,
+    padding: 20,
+    gap: 20,
+    ...shadows.float,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontFamily: typography.fonts.bold,
+    fontSize: typography.size.md.fontSize,
+    color: colors.neutral900,
+  },
+  milestoneGraphic: {
+    backgroundColor: colors.blue500,
+    borderRadius: radius.card,
+    padding: 24,
+    alignItems: 'center',
+    gap: 12,
+  },
+  milestoneCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  graphicTitle: {
+    fontFamily: typography.fonts.bold,
+    fontSize: typography.size.lg.fontSize,
+    color: colors.white,
+    letterSpacing: 0.5,
+  },
+  graphicSub: {
+    fontFamily: typography.fonts.medium,
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.85)',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  graphicLogo: {
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    backgroundColor: colors.white,
+    borderRadius: radius.pill,
+  },
+  graphicLogoText: {
+    fontFamily: typography.fonts.bold,
+    fontSize: 12,
+    color: colors.blue500,
+  }
+});

@@ -1,0 +1,452 @@
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  SafeAreaView,
+  TextInput,
+  ScrollView,
+  Pressable,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
+import { useAuthStore } from '../../store/authStore';
+import { colors, typography, spacing, radius } from '../../constants/theme';
+import { Button } from '../../components/ui/Button';
+import { ShieldCheck, CaretLeft } from 'phosphor-react-native';
+import { useRouter } from 'expo-router';
+
+const TOTAL_STEPS = 3;
+const DIET_PREFS = ['Vegetarian', 'Non-Vegetarian', 'Both'];
+
+function ProgressLine({ step }: { step: number }) {
+  const progress = (step / TOTAL_STEPS) * 100;
+  return (
+    <View style={progressStyles.track}>
+      <View style={[progressStyles.fill, { width: `${progress}%` }]} />
+    </View>
+  );
+}
+
+const progressStyles = StyleSheet.create({
+  track: {
+    height: 2,
+    backgroundColor: colors.neutral100,
+    width: '100%',
+  },
+  fill: {
+    height: 2,
+    backgroundColor: colors.blue400,
+  },
+});
+
+function ChipSelector({
+  options,
+  selected,
+  onSelect,
+}: {
+  options: string[];
+  selected: string;
+  onSelect: (val: string) => void;
+}) {
+  return (
+    <View style={chipStyles.container}>
+      {options.map((opt) => {
+        const active = selected === opt;
+        return (
+          <Pressable
+            key={opt}
+            style={[chipStyles.chip, active && chipStyles.chipActive]}
+            onPress={() => onSelect(opt)}
+          >
+            <Text style={[chipStyles.text, active && chipStyles.textActive]}>{opt}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+const chipStyles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  chip: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: radius.pill,
+    backgroundColor: colors.neutral50,
+    borderWidth: 1,
+    borderColor: colors.neutral200,
+  },
+  chipActive: {
+    backgroundColor: colors.blue400,
+    borderColor: colors.blue400,
+  },
+  text: {
+    fontFamily: typography.fonts.medium,
+    fontSize: typography.size.sm.fontSize,
+    color: colors.neutral600,
+  },
+  textActive: {
+    color: colors.white,
+  },
+});
+
+function CapacitySlider({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  const steps = [10, 25, 50, 100, 150, 200];
+  return (
+    <View>
+      <View style={sliderStyles.row}>
+        {steps.map((s) => (
+          <Pressable
+            key={s}
+            style={[sliderStyles.step, value === s && sliderStyles.stepActive]}
+            onPress={() => onChange(s)}
+          >
+            <Text style={[sliderStyles.stepText, value === s && sliderStyles.stepTextActive]}>
+              {s}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+      <Text style={sliderStyles.unit}>kg / day</Text>
+    </View>
+  );
+}
+
+const sliderStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  step: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: radius.pill,
+    backgroundColor: colors.neutral50,
+    borderWidth: 1,
+    borderColor: colors.neutral200,
+    minWidth: 52,
+    alignItems: 'center',
+  },
+  stepActive: {
+    backgroundColor: colors.blue400,
+    borderColor: colors.blue400,
+  },
+  stepText: {
+    fontFamily: typography.fonts.medium,
+    fontSize: typography.size.sm.fontSize,
+    color: colors.neutral600,
+  },
+  stepTextActive: {
+    color: colors.white,
+  },
+  unit: {
+    fontFamily: typography.fonts.regular,
+    fontSize: typography.size.xs.fontSize,
+    color: colors.neutral400,
+    marginTop: 10,
+  },
+});
+
+export default function NGOOnboardScreen() {
+  const { setOnboarded, updateUser, logout } = useAuthStore();
+  const router = useRouter();
+  const [step, setStep] = useState(1);
+
+  // Step 1
+  const [orgName, setOrgName] = useState('');
+  const [regNumber, setRegNumber] = useState('');
+
+  // Step 2
+  const [address, setAddress] = useState('');
+
+  // Step 3
+  const [dietPref, setDietPref] = useState('Both');
+  const [capacity, setCapacity] = useState(50);
+
+  const handleNext = () => {
+    if (step < TOTAL_STEPS) {
+      setStep((s) => s + 1);
+    } else {
+      if (orgName) updateUser({ name: orgName });
+      setOnboarded();
+    }
+  };
+
+  const handleBack = () => {
+    if (step === 1) {
+      logout();
+      router.replace('/(auth)');
+    } else {
+      setStep((s) => s - 1);
+    }
+  };
+
+  const canProceed =
+    step === 1 ? orgName.trim().length > 0 :
+    step === 2 ? address.trim().length > 0 :
+    true;
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <ProgressLine step={step} />
+
+      {/* Top-left back / cancel button */}
+      <View style={styles.topNav}>
+        <Pressable style={styles.topBackBtn} onPress={handleBack}>
+          <CaretLeft color={colors.neutral900} size={20} weight="bold" />
+          <Text style={styles.topBackLabel}>
+            {step === 1 ? 'Cancel' : 'Back'}
+          </Text>
+        </Pressable>
+      </View>
+
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.stepIndicator}>
+            <Text style={styles.stepCount}>Step {step} of {TOTAL_STEPS}</Text>
+          </View>
+
+          {step === 1 && (
+            <View style={styles.stepContent}>
+              <Text style={styles.title}>Tell us about your organisation.</Text>
+              <Text style={styles.subtitle}>
+                Your registration number will be verified before your account goes live.
+              </Text>
+
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Organisation Name</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. Hope Foundation"
+                  placeholderTextColor={colors.neutral400}
+                  value={orgName}
+                  onChangeText={setOrgName}
+                  autoCapitalize="words"
+                  autoFocus
+                />
+              </View>
+
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Registration Number</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. FCRA/2024/12345"
+                  placeholderTextColor={colors.neutral400}
+                  value={regNumber}
+                  onChangeText={setRegNumber}
+                  autoCapitalize="characters"
+                />
+              </View>
+
+              <View style={styles.verifyNote}>
+                <ShieldCheck color={colors.verified} size={16} weight="fill" />
+                <Text style={styles.verifyNoteText}>
+                  Your account will show as "Pending Verification" until reviewed.
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {step === 2 && (
+            <View style={styles.stepContent}>
+              <Text style={styles.title}>Where is your organisation based?</Text>
+              <Text style={styles.subtitle}>
+                Donors nearby will be prioritised in your feed.
+              </Text>
+
+              <View style={styles.fieldGroup}>
+                <TextInput
+                  style={[styles.input, styles.inputMultiline]}
+                  placeholder="Enter your address"
+                  placeholderTextColor={colors.neutral400}
+                  value={address}
+                  onChangeText={setAddress}
+                  multiline
+                  numberOfLines={3}
+                  autoCapitalize="words"
+                  autoFocus
+                />
+              </View>
+            </View>
+          )}
+
+          {step === 3 && (
+            <View style={styles.stepContent}>
+              <Text style={styles.title}>What can your organisation accept?</Text>
+              <Text style={styles.subtitle}>
+                This helps match you with the right donors automatically.
+              </Text>
+
+              <Text style={styles.fieldLabel}>Food Preference</Text>
+              <View style={{ marginBottom: 32 }}>
+                <ChipSelector
+                  options={DIET_PREFS}
+                  selected={dietPref}
+                  onSelect={setDietPref}
+                />
+              </View>
+
+              <Text style={styles.fieldLabel}>Daily Capacity</Text>
+              <CapacitySlider value={capacity} onChange={setCapacity} />
+            </View>
+          )}
+
+          <View style={styles.actions}>
+            <View style={styles.nextBtnFull}>
+              <Button
+                label={step === TOTAL_STEPS ? 'Complete Setup' : 'Continue'}
+                onPress={handleNext}
+                disabled={!canProceed}
+              />
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.neutral0,
+  },
+  topNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.screenHorizontal,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  topBackBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    marginLeft: -8,
+  },
+  topBackLabel: {
+    fontFamily: typography.fonts.semiBold,
+    fontSize: typography.size.base.fontSize,
+    color: colors.neutral900,
+  },
+  content: {
+    paddingHorizontal: spacing.screenHorizontal,
+    paddingTop: 32,
+    paddingBottom: 40,
+  },
+  stepIndicator: {
+    marginBottom: 24,
+  },
+  stepCount: {
+    fontFamily: typography.fonts.medium,
+    fontSize: typography.size.sm.fontSize,
+    color: colors.neutral400,
+  },
+  stepContent: {
+    flex: 1,
+  },
+  title: {
+    fontFamily: typography.fonts.bold,
+    fontSize: typography.size.xl.fontSize,
+    color: colors.neutral900,
+    lineHeight: typography.size.xl.lineHeight,
+    marginBottom: 8,
+    letterSpacing: -0.5,
+  },
+  subtitle: {
+    fontFamily: typography.fonts.regular,
+    fontSize: typography.size.base.fontSize,
+    color: colors.neutral400,
+    marginBottom: 32,
+    lineHeight: 22,
+  },
+  fieldGroup: {
+    marginBottom: 20,
+  },
+  fieldLabel: {
+    fontFamily: typography.fonts.medium,
+    fontSize: typography.size.sm.fontSize,
+    color: colors.neutral900,
+    marginBottom: 12,
+  },
+  input: {
+    backgroundColor: colors.neutral50,
+    borderWidth: 1,
+    borderColor: colors.neutral200,
+    borderRadius: radius.input,
+    height: 56,
+    paddingHorizontal: 16,
+    fontFamily: typography.fonts.regular,
+    fontSize: 15,
+    color: colors.neutral900,
+  },
+  inputMultiline: {
+    height: 100,
+    paddingTop: 16,
+    paddingBottom: 16,
+    textAlignVertical: 'top',
+  },
+  verifyNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: colors.verified + '12',
+    borderRadius: radius.card,
+    padding: 12,
+    marginTop: 4,
+  },
+  verifyNoteText: {
+    flex: 1,
+    fontFamily: typography.fonts.regular,
+    fontSize: typography.size.xs.fontSize,
+    color: colors.verified,
+    lineHeight: 18,
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 40,
+    alignItems: 'center',
+  },
+  backBtn: {
+    height: 56,
+    paddingHorizontal: 20,
+    borderRadius: radius.button,
+    borderWidth: 1,
+    borderColor: colors.neutral200,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  backBtnText: {
+    fontFamily: typography.fonts.medium,
+    fontSize: typography.size.base.fontSize,
+    color: colors.neutral600,
+  },
+  nextBtnFull: {
+    flex: 1,
+  },
+  nextBtnPartial: {
+    flex: 1,
+  },
+});
