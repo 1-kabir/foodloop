@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   ScrollView,
   Pressable,
   Image,
+  Animated,
 } from 'react-native';
 import { useAuthStore } from '../../store/authStore';
 import { colors, typography, spacing, radius, shadows } from '../../constants/theme';
@@ -18,6 +19,7 @@ import {
   CheckCircle,
   Clock,
   ArrowRight,
+  Lightning,
 } from 'phosphor-react-native';
 
 type VerifyState = 'form' | 'submitted';
@@ -43,12 +45,52 @@ const DOC_TYPES = [
   },
 ];
 
+const DEMO_SECONDS = 30;
+
 export default function VerifyScreen() {
   const { user, submitVerification, approveVerification } = useAuthStore();
   const [verifyState, setVerifyState] = useState<VerifyState>(
     user?.verificationStatus === 'pending' ? 'submitted' : 'form'
   );
   const [uploaded, setUploaded] = useState<Record<string, boolean>>({});
+  const [secondsLeft, setSecondsLeft] = useState(DEMO_SECONDS);
+  const [approved, setApproved] = useState(false);
+  const progressAnim = useRef(new Animated.Value(1)).current;
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Start the countdown as soon as we enter submitted state
+  useEffect(() => {
+    if (verifyState !== 'submitted' || approved) return;
+
+    // Animate the progress bar from full → empty over DEMO_SECONDS
+    Animated.timing(progressAnim, {
+      toValue: 0,
+      duration: DEMO_SECONDS * 1000,
+      useNativeDriver: false,
+    }).start();
+
+    timerRef.current = setInterval(() => {
+      setSecondsLeft((s) => {
+        if (s <= 1) {
+          clearInterval(timerRef.current!);
+          handleAutoApprove();
+          return 0;
+        }
+        return s - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [verifyState]);
+
+  const handleAutoApprove = async () => {
+    if (approved) return;
+    setApproved(true);
+    if (timerRef.current) clearInterval(timerRef.current);
+    await approveVerification();
+  };
 
   const toggleUpload = (key: string) => {
     setUploaded((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -65,18 +107,29 @@ export default function VerifyScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <ScrollView contentContainerStyle={styles.pendingContent}>
-          <View style={styles.pendingIconWrap}>
-            <Clock color={colors.amber} size={48} weight="fill" />
+          {/* Status icon */}
+          <View style={[styles.pendingIconWrap, approved && styles.pendingIconWrapApproved]}>
+            {approved
+              ? <CheckCircle color={colors.green} size={48} weight="fill" />
+              : <Clock color={colors.amber} size={48} weight="fill" />
+            }
           </View>
 
-          <Text style={styles.pendingTitle}>Application Submitted</Text>
+          <Text style={styles.pendingTitle}>
+            {approved ? 'Account Approved!' : 'Application Submitted'}
+          </Text>
           <Text style={styles.pendingSubtitle}>
-            Our team will review your documents and verify your account within{' '}
-            <Text style={styles.pendingHighlight}>1–2 business days.</Text>
-            {'\n\n'}
-            You'll receive an email at{' '}
-            <Text style={styles.pendingHighlight}>{user?.email}</Text> once
-            your account is approved.
+            {approved
+              ? `Welcome to FoodLoop, ${user?.name?.split(' ')[0] ?? 'there'}. You're now verified and ready to go.`
+              : <>
+                  Our team will review your documents and verify your account within{' '}
+                  <Text style={styles.pendingHighlight}>1–2 business days.</Text>
+                  {'\n\n'}
+                  You'll receive an email at{' '}
+                  <Text style={styles.pendingHighlight}>{user?.email}</Text> once
+                  your account is approved.
+                </>
+            }
           </Text>
 
           <View style={styles.timelineCard}>
@@ -87,29 +140,52 @@ export default function VerifyScreen() {
               done
             />
             <TimelineRow
-              icon={<Clock color={colors.neutral400} size={18} weight="regular" />}
+              icon={<Clock color={approved ? colors.blue400 : colors.neutral400} size={18} weight={approved ? 'fill' : 'regular'} />}
               label="Documents under review"
-              sub="1–2 business days"
-              done={false}
+              sub={approved ? 'Completed' : '1–2 business days'}
+              done={approved}
             />
             <TimelineRow
-              icon={<CheckCircle color={colors.neutral200} size={18} weight="fill" />}
+              icon={<CheckCircle color={approved ? colors.green : colors.neutral200} size={18} weight="fill" />}
               label="Account approved"
-              sub="You'll get an email"
-              done={false}
+              sub={approved ? 'Just now ✓' : 'You\'ll get an email'}
+              done={approved}
               last
             />
           </View>
 
-          {/* Demo shortcut */}
-          <View style={styles.demoSection}>
-            <Text style={styles.demoLabel}>Demo mode</Text>
-            <Button
-              label="Approve & Enter App"
-              variant="outline"
-              onPress={approveVerification}
-            />
-          </View>
+          {/* Demo auto-approval banner */}
+          {!approved && (
+            <View style={styles.demoCard}>
+              <View style={styles.demoCardHeader}>
+                <Lightning color={colors.amber} size={16} weight="fill" />
+                <Text style={styles.demoCardTitle}>DEMO MODE</Text>
+              </View>
+              <Text style={styles.demoCardBody}>
+                Auto-approving your account in{' '}
+                <Text style={styles.demoCountdown}>{secondsLeft}s</Text>
+              </Text>
+
+              {/* Progress bar */}
+              <View style={styles.progressTrack}>
+                <Animated.View
+                  style={[
+                    styles.progressFill,
+                    {
+                      width: progressAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: ['0%', '100%'],
+                      }),
+                    },
+                  ]}
+                />
+              </View>
+
+              <Pressable style={styles.skipBtn} onPress={handleAutoApprove}>
+                <Text style={styles.skipBtnText}>Skip wait →</Text>
+              </Pressable>
+            </View>
+          )}
         </ScrollView>
       </SafeAreaView>
     );
@@ -398,15 +474,54 @@ const styles = StyleSheet.create({
     padding: 20,
     marginBottom: 48,
   },
-  demoSection: {
-    gap: 12,
+  pendingIconWrapApproved: {
+    backgroundColor: colors.green + '18',
   },
-  demoLabel: {
-    fontFamily: typography.fonts.medium,
-    fontSize: typography.size.xs.fontSize,
-    color: colors.neutral400,
-    textAlign: 'center',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
+  demoCard: {
+    backgroundColor: colors.neutral50,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: colors.amber + '40',
+    padding: 16,
+    gap: 10,
+  },
+  demoCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  demoCardTitle: {
+    fontFamily: typography.fonts.semiBold,
+    fontSize: 11,
+    color: colors.amber,
+    letterSpacing: 0.8,
+  },
+  demoCardBody: {
+    fontFamily: typography.fonts.regular,
+    fontSize: typography.size.sm.fontSize,
+    color: colors.neutral600,
+  },
+  demoCountdown: {
+    fontFamily: typography.fonts.bold,
+    color: colors.neutral900,
+  },
+  progressTrack: {
+    height: 4,
+    backgroundColor: colors.neutral200,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: colors.amber,
+    borderRadius: 2,
+  },
+  skipBtn: {
+    alignSelf: 'flex-end',
+  },
+  skipBtnText: {
+    fontFamily: typography.fonts.semiBold,
+    fontSize: typography.size.sm.fontSize,
+    color: colors.blue500,
   },
 });
