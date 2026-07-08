@@ -1,72 +1,74 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, Text, View, Pressable } from 'react-native';
+import { StyleSheet, Text, View, Pressable, Dimensions } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
 } from 'react-native-reanimated';
 import { useToastStore } from '../../store/toastStore';
-import { colors, typography, radius } from '../../constants/theme';
+import { colors, typography, radius, shadows } from '../../constants/theme';
 import { CheckCircle, Warning, Info, X } from 'phosphor-react-native';
+
+const { width } = Dimensions.get('window');
 
 export const Toast: React.FC = () => {
   const { visible, message, type, hideToast } = useToastStore();
   
-  // Slide down from top safe area (-100 to 16)
-  const translateY = useSharedValue(-120);
+  // Slide up from bottom safe area (starts at 100 offscreen, settles at 20)
+  const translateY = useSharedValue(150);
 
   useEffect(() => {
     if (visible) {
-      translateY.value = withSpring(16, { stiffness: 280, damping: 26 });
+      translateY.value = withSpring(0, { stiffness: 300, damping: 24 });
     } else {
-      translateY.value = withSpring(-120, { stiffness: 280, damping: 26 });
+      translateY.value = withSpring(150, { stiffness: 300, damping: 24 });
     }
   }, [visible]);
 
-  if (!visible && translateY.value === -120) return null;
+  if (!visible && translateY.value === 150) return null;
 
-  const getToastStyles = () => {
+  const getToastConfig = () => {
     switch (type) {
       case 'success':
         return {
-          backgroundColor: colors.green + '12',
-          borderColor: colors.green + '30',
-          iconColor: colors.green,
+          textColor: colors.green,
+          indicatorColor: colors.green,
           Icon: CheckCircle,
         };
       case 'error':
         return {
-          backgroundColor: colors.red + '12',
-          borderColor: colors.red + '30',
-          iconColor: colors.red,
+          textColor: colors.red,
+          indicatorColor: colors.red,
           Icon: Warning,
         };
       default:
         return {
-          backgroundColor: colors.blue50,
-          borderColor: colors.blue200,
-          iconColor: colors.blue500,
+          textColor: colors.blue500,
+          indicatorColor: colors.blue400,
           Icon: Info,
         };
     }
   };
 
-  const toastStyle = getToastStyles();
-  const Icon = toastStyle.Icon;
+  const config = getToastConfig();
+  const Icon = config.Icon;
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
   }));
 
   return (
-    <Animated.View style={[styles.container, toastStyle, animatedStyle]}>
-      <View style={styles.content}>
-        <Icon color={toastStyle.iconColor} size={20} weight="fill" />
+    <Animated.View style={[styles.container, animatedStyle]}>
+      {/* Urgency-style left color indicator bar matching guidelines */}
+      <View style={[styles.indicatorBar, { backgroundColor: config.indicatorColor }]} />
+      
+      <View style={styles.inner}>
+        <Icon color={config.indicatorColor} size={20} weight="bold" />
         <Text style={styles.text} numberOfLines={2}>
           {message}
         </Text>
         <Pressable onPress={hideToast} style={styles.closeBtn}>
-          <X color={colors.neutral600} size={16} weight="bold" />
+          <X color={colors.neutral400} size={16} weight="bold" />
         </Pressable>
       </View>
     </Animated.View>
@@ -76,19 +78,28 @@ export const Toast: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    top: 40, // Positioned near top safe areas
+    bottom: 24,
     left: 20,
     right: 20,
     zIndex: 9999,
+    backgroundColor: colors.neutral50, // Matches cards
     borderRadius: radius.card,
     borderWidth: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    borderColor: colors.neutral100,
+    overflow: 'hidden',
+    flexDirection: 'row',
+    ...shadows.float, // Floating shadow since it sits on top of content
   },
-  content: {
+  indicatorBar: {
+    width: 4,
+  },
+  inner: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
   },
   text: {
     flex: 1,
