@@ -236,11 +236,7 @@ export default function LoginScreen() {
               />
             </View>
 
-            {!isSignup && (
-              <Pressable style={styles.forgotBtn}>
-                <Text style={styles.forgotText}>Forgot password?</Text>
-              </Pressable>
-            )}
+            {/* Removed forgot password buttons */}
           </View>
 
           {/* Bottom switch */}

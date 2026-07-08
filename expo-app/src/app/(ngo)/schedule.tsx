@@ -3,14 +3,17 @@ import { View, Text, StyleSheet, SafeAreaView, ScrollView, Pressable, Modal, Ale
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useClaimStore, Claim } from '../../store/claimStore';
 import { colors, typography, spacing, radius, shadows } from '../../constants/theme';
-import { Camera, Check, X } from 'phosphor-react-native';
+import { Camera, Check, X, CaretLeft, CaretRight, CalendarBlank, Info } from 'phosphor-react-native';
+import { useRouter } from 'expo-router';
+import { ScreenTransition } from '../../components/ui/ScreenTransition';
 
-function getCurrentWeekDays(): { label: string; day: string; date: Date }[] {
+function getWeekDays(weekOffset: number): { label: string; day: string; date: Date }[] {
   const today = new Date();
+  today.setDate(today.getDate() + weekOffset * 7);
   const dayOfWeek = today.getDay(); // 0 = Sunday
   const monday = new Date(today);
   monday.setDate(today.getDate() - ((dayOfWeek + 6) % 7));
-  const labels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   return labels.map((label, i) => {
     const d = new Date(monday);
     d.setDate(monday.getDate() + i);
@@ -41,21 +44,25 @@ const claimCardStyles = StyleSheet.create({
   },
   food: {
     fontFamily: typography.fonts.semiBold,
-    fontSize: typography.size.md.fontSize,
+    fontSize: 15,
     color: colors.neutral900,
     marginBottom: 4,
   },
   meta: {
     fontFamily: typography.fonts.regular,
-    fontSize: typography.size.sm.fontSize,
+    fontSize: 13,
     color: colors.neutral600,
   },
 });
 
 export default function NGOScheduleScreen() {
+  const router = useRouter();
   const { claims, fetchMyClaims, subscribeRealtime, unsubscribeRealtime, verifyPickup } = useClaimStore();
   const [permission, requestPermission] = useCameraPermissions();
-  const weekDays = getCurrentWeekDays();
+  
+  // Week offset state: 0 is current week, -1 is previous, 1 is next, etc.
+  const [weekOffset, setWeekOffset] = useState(0);
+  const weekDays = getWeekDays(weekOffset);
 
   const [scanVisible, setScanVisible] = useState(false);
   const [successVisible, setSuccessVisible] = useState(false);
@@ -95,99 +102,137 @@ export default function NGOScheduleScreen() {
     setSuccessVisible(true);
   };
 
+  // Get active month and year text for the current week slice
+  const getMonthYearLabel = () => {
+    const mondayDate = weekDays[0].date;
+    const sundayDate = weekDays[6].date;
+    const monMonth = mondayDate.toLocaleString('default', { month: 'long' });
+    const sunMonth = sundayDate.toLocaleString('default', { month: 'long' });
+    const yearStr = mondayDate.getFullYear();
+    
+    if (monMonth === sunMonth) {
+      return `${monMonth} ${yearStr}`;
+    }
+    return `${monMonth} - ${sunMonth} ${yearStr}`;
+  };
+
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.pageTitle}>Schedule</Text>
-      </View>
-
-      {/* Weekly segment calendar view */}
-      <View style={styles.calendarStrip}>
-        {weekDays.map((d) => {
-          const active = isSameDay(d.date, selectedDate);
-          return (
-            <Pressable
-              key={d.date.toISOString()}
-              style={[styles.calDay, active && styles.calDayActive]}
-              onPress={() => setSelectedDate(d.date)}
-            >
-              <Text style={[styles.calLabel, active && styles.calLabelActive]}>{d.label}</Text>
-              <Text style={[styles.calNum, active && styles.calNumActive]}>{d.day}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {claimedFood.length > 0 ? (
-          <View style={styles.list}>
-            {claimedFood.map(claim => (
-              <View key={claim.id} style={styles.scheduleItem}>
-                <View style={styles.timeline}>
-                  <View style={styles.timelineDot} />
-                  <View style={styles.timelineLine} />
-                </View>
-                <View style={styles.cardContainer}>
-                  <Text style={styles.timeLabel}>
-                    {new Date(claim.pickupTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </Text>
-                  <ClaimCard claim={claim} />
-                  <Pressable style={styles.scanBtn} onPress={openScanner}>
-                    <Camera color={colors.white} size={18} weight="bold" />
-                    <Text style={styles.scanBtnText}>Verify Collection</Text>
-                  </Pressable>
-                </View>
-              </View>
-            ))}
-          </View>
-        ) : (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>No pickups scheduled for this day.</Text>
-          </View>
-        )}
-      </ScrollView>
-
-      {/* Real camera-based QR scanner */}
-      <Modal visible={scanVisible} transparent animationType="slide">
-        <View style={styles.modalScrim}>
-          <View style={styles.scannerWindow}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Scan Donor QR Code</Text>
-              <Pressable onPress={() => setScanVisible(false)}>
-                <X color={colors.neutral900} size={24} />
+    <ScreenTransition>
+      <SafeAreaView style={styles.container}>
+        {/* Header Section */}
+        <View style={styles.header}>
+          <Text style={styles.pageTitle}>Collection Schedule</Text>
+          
+          {/* Week Selector Row */}
+          <View style={styles.weekSelectorRow}>
+            <Text style={styles.monthLabel}>{getMonthYearLabel()}</Text>
+            <View style={styles.navArrows}>
+              <Pressable style={styles.arrowBtn} onPress={() => setWeekOffset(w => w - 1)}>
+                <CaretLeft color={colors.neutral600} size={18} weight="bold" />
+              </Pressable>
+              <Pressable style={styles.arrowBtn} onPress={() => setWeekOffset(w => w + 1)}>
+                <CaretRight color={colors.neutral600} size={18} weight="bold" />
               </Pressable>
             </View>
-            <View style={styles.cameraBox}>
-              {permission?.granted ? (
-                <CameraView
-                  style={StyleSheet.absoluteFill}
-                  barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-                  onBarcodeScanned={scanning ? handleBarcodeScanned : undefined}
-                />
-              ) : null}
-              <View style={styles.focusFrame} pointerEvents="none" />
-              <Text style={styles.cameraSub}>Align QR code inside frame</Text>
-            </View>
           </View>
         </View>
-      </Modal>
 
-      {/* Verification Success Feedback modal */}
-      <Modal visible={successVisible} transparent animationType="fade">
-        <View style={styles.modalScrim}>
-          <View style={styles.successCard}>
-            <View style={styles.successIcon}>
-              <Check color={colors.white} size={32} weight="bold" />
-            </View>
-            <Text style={styles.successTitle}>Pickup Verified</Text>
-            <Text style={styles.successSub}>Collection completed successfully. Impact metrics updated!</Text>
-            <Pressable style={styles.closeBtn} onPress={() => setSuccessVisible(false)}>
-              <Text style={styles.closeBtnText}>Done</Text>
-            </Pressable>
-          </View>
+        {/* Weekly segment calendar view */}
+        <View style={styles.calendarStrip}>
+          {weekDays.map((d) => {
+            const active = isSameDay(d.date, selectedDate);
+            return (
+              <Pressable
+                key={d.date.toISOString()}
+                style={[styles.calDay, active && styles.calDayActive]}
+                onPress={() => setSelectedDate(d.date)}
+              >
+                <Text style={[styles.calLabel, active && styles.calLabelActive]}>{d.label}</Text>
+                <Text style={[styles.calNum, active && styles.calNumActive]}>{d.day}</Text>
+              </Pressable>
+            );
+          })}
         </View>
-      </Modal>
-    </SafeAreaView>
+
+        {/* List content */}
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          {claimedFood.length > 0 ? (
+            <View style={styles.list}>
+              {claimedFood.map(claim => (
+                <View key={claim.id} style={styles.scheduleItem}>
+                  <View style={styles.timeline}>
+                    <View style={styles.timelineDot} />
+                    <View style={styles.timelineLine} />
+                  </View>
+                  <View style={styles.cardContainer}>
+                    <Text style={styles.timeLabel}>
+                      {new Date(claim.pickupTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                    <ClaimCard claim={claim} />
+                    <Pressable style={styles.scanBtn} onPress={openScanner}>
+                      <Camera color={colors.white} size={18} weight="bold" />
+                      <Text style={styles.scanBtnText}>Verify Collection</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <View style={styles.emptyState}>
+              <View style={styles.emptyIconWrap}>
+                <CalendarBlank size={36} color={colors.neutral400} weight="thin" />
+              </View>
+              <Text style={styles.emptyText}>No Collections Scheduled</Text>
+              <Text style={styles.emptySubtext}>You have no pending pickups for this date.</Text>
+              <Pressable style={styles.browseBtn} onPress={() => router.push('/(ngo)/browse' as any)}>
+                <Text style={styles.browseBtnText}>Browse Available Food</Text>
+              </Pressable>
+            </View>
+          )}
+        </ScrollView>
+
+        {/* Real camera-based QR scanner */}
+        <Modal visible={scanVisible} transparent animationType="slide">
+          <View style={styles.modalScrim}>
+            <View style={styles.scannerWindow}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Scan Donor QR Code</Text>
+                <Pressable onPress={() => setScanVisible(false)}>
+                  <X color={colors.neutral900} size={24} />
+                </Pressable>
+              </View>
+              <View style={styles.cameraBox}>
+                {permission?.granted ? (
+                  <CameraView
+                    style={StyleSheet.absoluteFill}
+                    barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+                    onBarcodeScanned={scanning ? handleBarcodeScanned : undefined}
+                  />
+                ) : null}
+                <View style={styles.focusFrame} pointerEvents="none" />
+                <Text style={styles.cameraSub}>Align QR code inside frame</Text>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Verification Success Feedback modal */}
+        <Modal visible={successVisible} transparent animationType="fade">
+          <View style={styles.modalScrim}>
+            <View style={styles.successCard}>
+              <View style={styles.successIcon}>
+                <Check color={colors.white} size={32} weight="bold" />
+              </View>
+              <Text style={styles.successTitle}>Pickup Verified</Text>
+              <Text style={styles.successSub}>Collection completed successfully. Impact metrics updated!</Text>
+              <Pressable style={styles.closeBtn} onPress={() => setSuccessVisible(false)}>
+                <Text style={styles.closeBtnText}>Done</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
+      </SafeAreaView>
+    </ScreenTransition>
   );
 }
 
@@ -199,37 +244,69 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: spacing.screenHorizontal,
     paddingTop: 24,
-    paddingBottom: 16,
+    paddingBottom: 8,
   },
   pageTitle: {
     fontFamily: typography.fonts.bold,
-    fontSize: typography.size.xl.fontSize,
+    fontSize: 24,
     color: colors.neutral900,
     letterSpacing: -0.5,
+    marginBottom: 12,
+  },
+  weekSelectorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  monthLabel: {
+    fontFamily: typography.fonts.semiBold,
+    fontSize: 16,
+    color: colors.neutral900,
+  },
+  navArrows: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  arrowBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: colors.neutral50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.neutral100,
   },
   calendarStrip: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.screenHorizontal,
-    marginBottom: 20,
+    marginVertical: 14,
   },
   calDay: {
     alignItems: 'center',
     paddingVertical: 10,
-    width: 42,
-    borderRadius: radius.card,
+    width: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.neutral50,
+    backgroundColor: colors.neutral50,
   },
   calDayActive: {
-    backgroundColor: colors.blue400,
+    backgroundColor: colors.blue500,
+    borderColor: colors.blue500,
   },
   calLabel: {
     fontFamily: typography.fonts.medium,
-    fontSize: 12,
+    fontSize: 10,
     color: colors.neutral400,
+    textTransform: 'uppercase',
     marginBottom: 4,
   },
   calLabelActive: {
     color: 'rgba(255,255,255,0.8)',
+    fontFamily: typography.fonts.semiBold,
   },
   calNum: {
     fontFamily: typography.fonts.bold,
@@ -274,7 +351,7 @@ const styles = StyleSheet.create({
   },
   timeLabel: {
     fontFamily: typography.fonts.semiBold,
-    fontSize: typography.size.sm.fontSize,
+    fontSize: 13,
     color: colors.neutral600,
     marginBottom: 8,
   },
@@ -283,7 +360,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: colors.blue400,
+    backgroundColor: colors.blue500,
     height: 48,
     borderRadius: radius.button,
     marginTop: 10,
@@ -294,14 +371,46 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
   emptyState: {
-    padding: 40,
+    paddingVertical: 80,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  emptyIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: colors.neutral50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: colors.neutral100,
+  },
   emptyText: {
-    fontFamily: typography.fonts.medium,
-    fontSize: typography.size.base.fontSize,
+    fontFamily: typography.fonts.bold,
+    fontSize: 16,
+    color: colors.neutral900,
+    marginBottom: 6,
+  },
+  emptySubtext: {
+    fontFamily: typography.fonts.regular,
+    fontSize: 12,
     color: colors.neutral400,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  browseBtn: {
+    backgroundColor: colors.blue50,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: radius.button,
+    borderWidth: 1,
+    borderColor: colors.blue100,
+  },
+  browseBtnText: {
+    fontFamily: typography.fonts.semiBold,
+    fontSize: 13,
+    color: colors.blue600,
   },
   modalScrim: {
     flex: 1,
@@ -350,20 +459,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: 'rgba(255,255,255,0.7)',
     marginTop: 12,
-  },
-  mockSuccessBtn: {
-    backgroundColor: colors.neutral50,
-    borderWidth: 1,
-    borderColor: colors.neutral200,
-    height: 48,
-    borderRadius: radius.button,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  mockSuccessText: {
-    fontFamily: typography.fonts.semiBold,
-    fontSize: 14,
-    color: colors.blue500,
   },
   successCard: {
     width: '100%',

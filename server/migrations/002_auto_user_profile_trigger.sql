@@ -3,6 +3,12 @@
 --              created via Supabase Auth signup into our public.users profile table.
 --              This bypasses client-side RLS insert policies during initial registration.
 
+-- Ensure necessary profile fields exist in public.users table
+alter table public.users add column if not exists onboarded boolean default false;
+alter table public.users add column if not exists verification_status text default 'unsubmitted';
+alter table public.users add column if not exists registration_number text;
+alter table public.users add column if not exists diet_pref text;
+
 -- 1. Create the trigger function definition
 create or replace function public.handle_new_user()
 returns trigger as $$
