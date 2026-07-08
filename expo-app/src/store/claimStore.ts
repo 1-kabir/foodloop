@@ -11,6 +11,9 @@ export interface Claim {
   ngoName: string;
   donorId: string;
   donorName: string;
+  donorAddress: string;
+  lat: number | null;
+  lng: number | null;
   foodName: string;
   category: string;
   qtyClaimedKg: number;
@@ -27,6 +30,7 @@ export interface Claim {
 // that name being exactly right is more fragile than two extra round trips).
 const listingCache = new Map<string, ListingRow>();
 const nameCache = new Map<string, string>();
+const addressCache = new Map<string, string>();
 
 async function resolveListing(listingId: string): Promise<ListingRow | null> {
   if (listingCache.has(listingId)) return listingCache.get(listingId)!;
@@ -43,11 +47,20 @@ async function resolveName(userId: string): Promise<string> {
   return name;
 }
 
+async function resolveAddress(userId: string): Promise<string> {
+  if (addressCache.has(userId)) return addressCache.get(userId)!;
+  const { data } = await supabase.from('users').select('address').eq('id', userId).single();
+  const address = data?.address ?? '';
+  addressCache.set(userId, address);
+  return address;
+}
+
 async function rowToClaim(row: ClaimRow): Promise<Claim> {
   const listing = await resolveListing(row.listing_id);
-  const [ngoName, donorName] = await Promise.all([
+  const [ngoName, donorName, donorAddress] = await Promise.all([
     resolveName(row.ngo_id),
     listing ? resolveName(listing.donor_id) : Promise.resolve('Unknown donor'),
+    listing ? resolveAddress(listing.donor_id) : Promise.resolve(''),
   ]);
 
   return {
@@ -57,6 +70,9 @@ async function rowToClaim(row: ClaimRow): Promise<Claim> {
     ngoName,
     donorId: listing?.donor_id ?? '',
     donorName,
+    donorAddress,
+    lat: listing?.lat ?? null,
+    lng: listing?.lng ?? null,
     foodName: listing?.food_name ?? 'Listing removed',
     category: listing?.category ?? '',
     qtyClaimedKg: row.qty_claimed_kg,

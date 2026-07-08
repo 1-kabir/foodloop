@@ -7,6 +7,7 @@ import { colors, typography, spacing, radius } from '../../constants/theme';
 import { Button } from '../../components/ui/Button';
 import { ScreenTransition } from '../../components/ui/ScreenTransition';
 import { CaretLeft } from 'phosphor-react-native';
+import { apiService } from '../../lib/api';
 
 export default function EditProfileScreen() {
   const router = useRouter();
@@ -23,7 +24,17 @@ export default function EditProfileScreen() {
       return;
     }
     setLoading(true);
-    const { error } = await updateUserProfile({ name, address });
+    let coords = { lat: user?.lat ?? null, lng: user?.lng ?? null };
+    if (address.trim() && address !== user?.address) {
+      try {
+        const geo = await apiService.geocode(address);
+        coords.lat = geo.lat;
+        coords.lng = geo.lng;
+      } catch (e) {
+        console.warn('Geocoding updated address failed:', e);
+      }
+    }
+    const { error } = await updateUserProfile({ name, address, ...coords } as any);
     setLoading(false);
     if (error) {
       showToast(error, 'error');

@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, Pressable, Modal, Alert } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, Pressable, Modal, Alert, Linking } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useClaimStore, Claim } from '../../store/claimStore';
 import { colors, typography, spacing, radius, shadows } from '../../constants/theme';
-import { Camera, Check, X, CaretLeft, CaretRight, CalendarBlank, Info } from 'phosphor-react-native';
+import { Camera, Check, X, CaretLeft, CaretRight, CalendarBlank, Info, MapPin } from 'phosphor-react-native';
 import { useRouter } from 'expo-router';
 import { ScreenTransition } from '../../components/ui/ScreenTransition';
 
@@ -26,10 +26,35 @@ function isSameDay(a: Date, b: Date): boolean {
 }
 
 function ClaimCard({ claim }: { claim: Claim }) {
+  const handleOpenMaps = () => {
+    const url = claim.lat && claim.lng
+      ? `https://www.google.com/maps/search/?api=1&query=${claim.lat},${claim.lng}`
+      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(claim.donorAddress)}`;
+    Linking.openURL(url).catch(() => {
+      Alert.alert('Could not open maps', 'There was an issue opening Google Maps.');
+    });
+  };
+
   return (
     <View style={claimCardStyles.card}>
-      <Text style={claimCardStyles.food}>{claim.foodName}</Text>
-      <Text style={claimCardStyles.meta}>from {claim.donorName} • {claim.qtyClaimedKg} kg</Text>
+      <View style={claimCardStyles.mainInfo}>
+        <Text style={claimCardStyles.food}>{claim.foodName}</Text>
+        <Text style={claimCardStyles.meta}>from {claim.donorName} • {claim.qtyClaimedKg} kg</Text>
+        {claim.donorAddress ? (
+          <View style={claimCardStyles.addressRow}>
+            <MapPin size={14} color={colors.neutral400} weight="regular" />
+            <Text style={claimCardStyles.addressText} numberOfLines={1}>
+              {claim.donorAddress}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+      
+      {claim.donorAddress ? (
+        <Pressable style={claimCardStyles.mapBtn} onPress={handleOpenMaps}>
+          <MapPin size={18} color={colors.blue500} weight="fill" />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -41,17 +66,44 @@ const claimCardStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.neutral100,
     padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  mainInfo: {
+    flex: 1,
+    gap: 4,
   },
   food: {
     fontFamily: typography.fonts.semiBold,
     fontSize: 15,
     color: colors.neutral900,
-    marginBottom: 4,
   },
   meta: {
     fontFamily: typography.fonts.regular,
     fontSize: 13,
     color: colors.neutral600,
+  },
+  addressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  addressText: {
+    fontFamily: typography.fonts.regular,
+    fontSize: 12,
+    color: colors.neutral400,
+    flex: 1,
+  },
+  mapBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.blue50,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 

@@ -78,6 +78,8 @@ interface AuthState {
     orgType: string;
     registrationNumber: string;
     maxCapacityKg: number;
+    lat: number;
+    lng: number;
   }>) => Promise<AuthResult>;
   setOnboarded: () => Promise<void>;
   submitVerification: () => Promise<void>;
