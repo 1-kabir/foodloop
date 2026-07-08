@@ -3,7 +3,8 @@ import { StyleSheet, Text, View, Pressable, Dimensions } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
+  withTiming,
+  Easing,
 } from 'react-native-reanimated';
 import { useToastStore } from '../../store/toastStore';
 import { colors, typography, radius, shadows } from '../../constants/theme';
@@ -14,22 +15,26 @@ const { width } = Dimensions.get('window');
 export const Toast: React.FC = () => {
   const { visible, message, type, hideToast } = useToastStore();
   
-  // Slide up from bottom safe area (starts at 100 offscreen, settles at 20)
-  const translateY = useSharedValue(150);
+  // Snappy layout inputs: slide up 32px and fade in
+  const translateY = useSharedValue(32);
+  const opacity = useSharedValue(0);
 
   useEffect(() => {
     if (visible) {
-      translateY.value = withSpring(0, { stiffness: 300, damping: 24 });
+      translateY.value = withTiming(0, { duration: 220, easing: Easing.out(Easing.quad) });
+      opacity.value = withTiming(1, { duration: 200 });
     } else {
-      translateY.value = withSpring(150, { stiffness: 300, damping: 24 });
+      translateY.value = withTiming(32, { duration: 200, easing: Easing.in(Easing.quad) });
+      opacity.value = withTiming(0, { duration: 180 });
     }
   }, [visible]);
 
   const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
     transform: [{ translateY: translateY.value }],
   }));
 
-  if (!visible && translateY.value === 150) return null;
+  if (!visible && opacity.value === 0) return null;
 
   const getToastConfig = () => {
     switch (type) {
