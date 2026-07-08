@@ -135,20 +135,6 @@ export default function NGOSettingsScreen() {
         <View style={styles.section}>
           <SettingsRow
             icon={<Bell color={colors.blue400} size={20} weight="regular" />}
-            label="Push Notifications"
-            sublabel="New food listings and pickup reminders"
-            right={
-              <Switch
-                value={notifications}
-                onValueChange={setNotifications}
-                trackColor={{ false: colors.neutral200, true: colors.blue300 }}
-                thumbColor={notifications ? colors.blue400 : colors.neutral400}
-              />
-            }
-          />
-          <View style={styles.divider} />
-          <SettingsRow
-            icon={<Bell color={colors.blue400} size={20} weight="regular" />}
             label="Notification History"
             sublabel="View past updates and alerts"
             onPress={() => router.push('/(ngo)/notifications')}
@@ -160,11 +146,13 @@ export default function NGOSettingsScreen() {
           <SettingsRow
             icon={<Lock color={colors.neutral600} size={20} weight="regular" />}
             label="Privacy Policy"
+            onPress={() => router.push('/(ngo)/privacy' as any)}
           />
           <View style={styles.divider} />
           <SettingsRow
             icon={<FileText color={colors.neutral600} size={20} weight="regular" />}
             label="Terms of Service"
+            onPress={() => router.push('/(ngo)/terms' as any)}
           />
         </View>
 

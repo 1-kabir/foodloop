@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,8 @@ import {
   ScrollView,
   Pressable,
   Modal,
+  Image,
+  Animated,
 } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { useAuthStore } from '../../store/authStore';
@@ -15,7 +17,7 @@ import { useClaimStore } from '../../store/claimStore';
 import { colors, typography, spacing, radius, shadows } from '../../constants/theme';
 import { FoodCard } from '../../components/FoodCard';
 import { useRouter } from 'expo-router';
-import { Plus, QrCode, X } from 'phosphor-react-native';
+import { Plus, QrCode, X, Clock, Scales, Calendar } from 'phosphor-react-native';
 
 export default function DonorListingsScreen() {
   const { user } = useAuthStore();
@@ -36,11 +38,65 @@ export default function DonorListingsScreen() {
 
   const myListings = listings.filter((l) => l.donorId === user?.id && l.status !== 'expired');
 
-  // QR Modal States
+  // Animated Bottom Drawer State
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(500)).current;
+  
   const activeClaimForSelected = selectedListing
     ? claims.find((c) => c.listingId === selectedListing.id && c.status === 'confirmed')
     : undefined;
+
+  const openDrawer = (listing: Listing) => {
+    setSelectedListing(listing);
+    setIsDrawerOpen(true);
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: true,
+      })
+    ]).start();
+  };
+
+  const closeDrawer = () => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 500,
+        duration: 200,
+        useNativeDriver: true,
+      })
+    ]).start(({ finished }) => {
+      if (finished) {
+        setIsDrawerOpen(false);
+        setSelectedListing(null);
+      }
+    });
+  };
+
+  // Parses listing's photoUrl which could be a single string URL or a JSON array of string URLs
+  const parseImages = (photoUrl: string | null): string[] => {
+    if (!photoUrl) return [];
+    if (photoUrl.startsWith('[')) {
+      try {
+        return JSON.parse(photoUrl);
+      } catch {
+        return [photoUrl];
+      }
+    }
+    return [photoUrl];
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -64,13 +120,13 @@ export default function DonorListingsScreen() {
               return (
                 <Pressable
                   key={listing.id}
-                  onPress={() => hasActiveClaim && setSelectedListing(listing)}
+                  onPress={() => openDrawer(listing)}
                 >
                   <FoodCard listing={listing} />
                   {hasActiveClaim && (
                     <View style={styles.claimedBadgeRow}>
                       <QrCode color={colors.blue500} size={16} />
-                      <Text style={styles.claimedBadgeText}>Tap to generate collection QR</Text>
+                      <Text style={styles.claimedBadgeText}>Active Claim — Tap for Details / QR</Text>
                     </View>
                   )}
                 </Pressable>
@@ -86,7 +142,7 @@ export default function DonorListingsScreen() {
         )}
       </ScrollView>
 
-      {/* FAB lives on the Listings screen, not Home */}
+      {/* FAB */}
       <Pressable
         style={styles.fab}
         onPress={() => router.push('/(donor)/list-food')}
@@ -94,39 +150,90 @@ export default function DonorListingsScreen() {
         <Plus color={colors.white} size={24} weight="bold" />
       </Pressable>
 
-      {/* QR Code Modal popup */}
-      <Modal visible={selectedListing !== null} transparent animationType="slide">
+      {/* Details Bottom Drawer */}
+      <Modal visible={isDrawerOpen} transparent animationType="none" onRequestClose={closeDrawer}>
         <View style={styles.modalScrim}>
-          <View style={styles.qrCard}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={closeDrawer} />
+          <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(26,43,60,0.5)', opacity: fadeAnim }]} />
+          <Animated.View style={[styles.detailsCard, { transform: [{ translateY: slideAnim }] }]}>
+            <View style={styles.indicatorHandle} />
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Verification QR Code</Text>
-              <Pressable onPress={() => setSelectedListing(null)}>
+              <Text style={styles.modalTitle}>Listing Details</Text>
+              <Pressable onPress={closeDrawer} style={styles.closeBtn}>
                 <X color={colors.neutral900} size={24} />
               </Pressable>
             </View>
-            {selectedListing && (
-              <View style={styles.qrContent}>
-                <Text style={styles.qrFoodName}>{selectedListing.foodName}</Text>
-                <Text style={styles.qrClaimInfo}>
-                  {activeClaimForSelected
-                    ? `Claimed by ${activeClaimForSelected.ngoName} • ${activeClaimForSelected.qtyClaimedKg} kg`
-                    : `${selectedListing.qty} kg reserved`}
-                </Text>
 
-                <View style={styles.qrSquare}>
-                  {activeClaimForSelected ? (
-                    <QRCode value={activeClaimForSelected.qrToken} size={168} color={colors.neutral900} backgroundColor={colors.white} />
-                  ) : (
-                    <Text style={styles.qrSub}>No active claim to verify yet.</Text>
-                  )}
+            {selectedListing && (
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalScroll}>
+                <Text style={styles.foodTitle}>{selectedListing.foodName}</Text>
+                
+                {/* Meta details row */}
+                <View style={styles.metaBadgeRow}>
+                  <View style={styles.metaBadge}>
+                    <Scales size={14} color={colors.neutral600} />
+                    <Text style={styles.metaBadgeText}>{selectedListing.qty} kg remaining</Text>
+                  </View>
+                  <View style={styles.metaBadge}>
+                    <Calendar size={14} color={colors.neutral600} />
+                    <Text style={styles.metaBadgeText}>{selectedListing.category}</Text>
+                  </View>
                 </View>
 
-                <Text style={styles.qrSub}>
-                  Present this code to the NGO driver upon pickup to finalize verification.
-                </Text>
-              </View>
+                {/* Uploaded image(s) gallery */}
+                {parseImages(selectedListing.photoUrl).length > 0 && (
+                  <View style={styles.gallerySection}>
+                    <Text style={styles.sectionLabel}>Uploaded Photos</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.galleryScroll}>
+                      {parseImages(selectedListing.photoUrl).map((url, idx) => (
+                        <Image key={idx} source={{ uri: url }} style={styles.galleryImage} resizeMode="cover" />
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+
+                {/* Pickup Window Info */}
+                <View style={styles.infoBlock}>
+                  <Clock size={16} color={colors.neutral600} />
+                  <View>
+                    <Text style={styles.infoLabel}>Preferred Pickup Range</Text>
+                    <Text style={styles.infoValue}>
+                      {selectedListing.pickupWindowStart
+                        ? new Date(selectedListing.pickupWindowStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        : 'Anytime'}{' '}
+                      to{' '}
+                      {selectedListing.pickupWindowEnd
+                        ? new Date(selectedListing.pickupWindowEnd).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        : 'Anytime'}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Claim / QR verification section */}
+                {activeClaimForSelected ? (
+                  <View style={styles.qrSection}>
+                    <View style={styles.qrHeader}>
+                      <QrCode color={colors.blue500} size={20} />
+                      <Text style={styles.qrSectionTitle}>Verification QR Code</Text>
+                    </View>
+                    <Text style={styles.qrClaimInfo}>
+                      Claimed by {activeClaimForSelected.ngoName} • {activeClaimForSelected.qtyClaimedKg} kg
+                    </Text>
+                    <View style={styles.qrSquare}>
+                      <QRCode value={activeClaimForSelected.qrToken} size={150} color={colors.neutral900} backgroundColor={colors.white} />
+                    </View>
+                    <Text style={styles.qrSub}>
+                      Present this code to the NGO driver upon pickup to finalize verification.
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.noClaimBlock}>
+                    <Text style={styles.noClaimText}>Waiting to be claimed by local NGOs</Text>
+                  </View>
+                )}
+              </ScrollView>
             )}
-          </View>
+          </Animated.View>
         </View>
       </Modal>
     </SafeAreaView>
@@ -200,78 +307,157 @@ const styles = StyleSheet.create({
   modalScrim: {
     flex: 1,
     backgroundColor: 'rgba(26,43,60,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
+    justifyContent: 'flex-end',
   },
-  qrCard: {
+  detailsCard: {
     width: '100%',
+    maxHeight: '85%',
     backgroundColor: colors.white,
-    borderRadius: radius.card,
-    padding: 20,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 24,
+    paddingBottom: 40,
     ...shadows.float,
+  },
+  indicatorHandle: {
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.neutral200,
+    alignSelf: 'center',
+    marginBottom: 16,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral100,
+    paddingBottom: 12,
   },
   modalTitle: {
     fontFamily: typography.fonts.bold,
-    fontSize: typography.size.md.fontSize,
+    fontSize: 16,
     color: colors.neutral900,
   },
-  qrContent: {
+  closeBtn: {
+    padding: 4,
+  },
+  modalScroll: {
+    paddingTop: 16,
+    gap: 16,
+  },
+  foodTitle: {
+    fontFamily: typography.fonts.bold,
+    fontSize: 20,
+    color: colors.neutral900,
+  },
+  metaBadgeRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  metaBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.neutral50,
+    borderWidth: 1,
+    borderColor: colors.neutral100,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  metaBadgeText: {
+    fontFamily: typography.fonts.medium,
+    fontSize: 12,
+    color: colors.neutral600,
+  },
+  gallerySection: {
+    gap: 8,
+  },
+  sectionLabel: {
+    fontFamily: typography.fonts.semiBold,
+    fontSize: 12,
+    color: colors.neutral400,
+    textTransform: 'uppercase',
+  },
+  galleryScroll: {
+    gap: 8,
+  },
+  galleryImage: {
+    width: 120,
+    height: 90,
+    borderRadius: radius.card,
+    backgroundColor: colors.neutral50,
+  },
+  infoBlock: {
+    flexDirection: 'row',
+    gap: 12,
+    backgroundColor: colors.neutral50,
+    borderWidth: 1,
+    borderColor: colors.neutral100,
+    padding: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  infoLabel: {
+    fontFamily: typography.fonts.medium,
+    fontSize: 11,
+    color: colors.neutral400,
+  },
+  infoValue: {
+    fontFamily: typography.fonts.semiBold,
+    fontSize: 13,
+    color: colors.neutral900,
+  },
+  qrSection: {
+    backgroundColor: colors.blue50,
+    borderColor: colors.blue200,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+  qrHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  qrFoodName: {
+  qrSectionTitle: {
     fontFamily: typography.fonts.bold,
-    fontSize: typography.size.lg.fontSize,
-    color: colors.neutral900,
+    fontSize: 14,
+    color: colors.blue600,
   },
   qrClaimInfo: {
     fontFamily: typography.fonts.medium,
-    fontSize: typography.size.sm.fontSize,
+    fontSize: 12,
     color: colors.neutral600,
-    marginBottom: 20,
   },
   qrSquare: {
-    width: 200,
-    height: 200,
-    borderWidth: 1,
-    borderColor: colors.neutral200,
-    borderRadius: 12,
-    padding: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
+    padding: 12,
     backgroundColor: colors.white,
-    marginBottom: 20,
-  },
-  qrGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  qrMarker: {
-    width: 40,
-    height: 40,
-    borderWidth: 6,
-    borderColor: colors.neutral900,
-    borderRadius: 6,
-  },
-  qrDotsBlock: {
-    width: 32,
-    height: 32,
-    backgroundColor: colors.neutral900,
-    alignSelf: 'center',
-    borderRadius: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.blue100,
+    marginVertical: 4,
   },
   qrSub: {
     fontFamily: typography.fonts.regular,
-    fontSize: 12,
+    fontSize: 11,
     color: colors.neutral400,
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: 16,
+  },
+  noClaimBlock: {
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  noClaimText: {
+    fontFamily: typography.fonts.medium,
+    fontSize: 13,
+    color: colors.neutral400,
+    fontStyle: 'italic',
   }
 });

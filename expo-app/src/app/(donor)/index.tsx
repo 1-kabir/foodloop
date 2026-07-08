@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import { colors, typography, spacing, radius } from '../../constants/theme';
 import { useRouter } from 'expo-router';
 import { StatusPill } from '../../components/ui/Badge';
 import type { Listing } from '../../store/listingStore';
+import { apiService, ImpactStats } from '../../lib/api';
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -107,18 +108,19 @@ export default function DonorDashboard() {
   const { user } = useAuthStore();
   const { listings, fetchListings, subscribeRealtime, unsubscribeRealtime } = useListingStore();
   const router = useRouter();
+  const [stats, setStats] = useState<ImpactStats | null>(null);
 
   useEffect(() => {
     fetchListings();
     subscribeRealtime();
+    if (user?.id) {
+      apiService.getImpact(user.id).then(setStats).catch(() => {});
+    }
     return () => unsubscribeRealtime();
-  }, []);
+  }, [user?.id]);
 
   const myAllListings = listings.filter((l) => l.donorId === user?.id);
   const myListings = myAllListings.filter((l) => l.status !== 'expired').slice(0, 3);
-  const totalKg = myAllListings.reduce((sum, l) => sum + l.totalQty, 0);
-  const activeCount = myAllListings.filter((l) => l.status === 'available').length;
-  const claimedCount = myAllListings.filter((l) => l.status === 'partial' || l.status === 'fully_claimed').length;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -132,19 +134,19 @@ export default function DonorDashboard() {
           <Text style={styles.name}>{user?.name}</Text>
         </View>
 
-        {/* Stat strip — per guidelines: blue-100 background, no border, unequal widths */}
+        {/* Stat strip — showing same metrics as impact screen */}
         <View style={styles.statStrip}>
           <View style={[styles.statBox, { flex: 2.2 }]}>
             <Text style={styles.statLabel}>Total rescued</Text>
-            <Text style={styles.statValue}>{totalKg} kg</Text>
+            <Text style={styles.statValue}>{stats?.totalKg ?? 0} kg</Text>
           </View>
           <View style={[styles.statBox, { flex: 1.4 }]}>
-            <Text style={styles.statLabel}>Active</Text>
-            <Text style={styles.statValue}>{activeCount}</Text>
+            <Text style={styles.statLabel}>Meals enabled</Text>
+            <Text style={styles.statValue}>{stats?.mealsEnabled ?? 0}</Text>
           </View>
           <View style={[styles.statBox, { flex: 1.4 }]}>
-            <Text style={styles.statLabel}>Claimed</Text>
-            <Text style={styles.statValue}>{claimedCount}</Text>
+            <Text style={styles.statLabel}>Partners</Text>
+            <Text style={styles.statValue}>{stats?.partnerCount ?? 0}</Text>
           </View>
         </View>
 
