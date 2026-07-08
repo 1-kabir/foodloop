@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, SafeAreaView, Pressable, TextInput, ScrollView,
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useListingStore } from '../../store/listingStore';
 import { useAuthStore } from '../../store/authStore';
+import { useToastStore } from '../../store/toastStore';
 import { api } from '../../lib/api';
 import { colors, typography, spacing, radius } from '../../constants/theme';
 import { Button } from '../../components/ui/Button';
@@ -36,6 +37,7 @@ export default function ClaimSheetScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuthStore();
+  const { showToast } = useToastStore();
   const { listings, fetchListings, claimListing } = useListingStore();
   const [claimQty, setClaimQty] = useState(1);
   const [pickupTime, setPickupTime] = useState('16:30');
@@ -82,7 +84,7 @@ export default function ClaimSheetScreen() {
       ? `https://www.google.com/maps/search/?api=1&query=${listing.lat},${listing.lng}`
       : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(listing.donorAddress)}`;
     Linking.openURL(url).catch(() => {
-      showAlert('Could not open maps', 'There was an issue opening Google Maps.');
+      showToast('There was an issue opening Google Maps.', 'error');
     });
   };
 
@@ -92,7 +94,7 @@ export default function ClaimSheetScreen() {
     setSubmitting(false);
 
     if (result.error) {
-      showAlert('Could not claim this listing', result.error);
+      showToast(result.error, 'error');
       return;
     }
 
@@ -105,9 +107,8 @@ export default function ClaimSheetScreen() {
       data: { type: 'claim_confirmed', listingId: listing.id },
     }).catch(() => {});
 
-    showAlert('Claim confirmed', `You've reserved ${claimQty}kg of ${listing.foodName}. Find it in your Schedule.`, () => {
-      router.back();
-    });
+    showToast(`Claim confirmed! Reserved ${claimQty}kg of ${listing.foodName}.`, 'success');
+    router.back();
   };
 
   const incrementQty = () => {
