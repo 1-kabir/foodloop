@@ -21,6 +21,7 @@ import Animated, {
   interpolate,
 } from 'react-native-reanimated';
 import { useAuthStore } from '../../store/authStore';
+import { useToastStore } from '../../store/toastStore';
 import { colors, typography, spacing, radius } from '../../constants/theme';
 import { Button } from '../../components/ui/Button';
 import { apiService } from '../../lib/api';
@@ -118,6 +119,7 @@ const chipStyles = StyleSheet.create({
 
 export default function DonorOnboardScreen() {
   const { setOnboarded, updateUser, logout } = useAuthStore();
+  const { showToast } = useToastStore();
   const router = useRouter();
   const [step, setStep] = useState(1);
 
@@ -151,7 +153,7 @@ export default function DonorOnboardScreen() {
         setCoords(result);
         setStep(3);
       } catch (err) {
-        alert('Could not verify address location. Please check spelling or enter a nearby landmark.');
+        showToast('Could not verify address location. Try a different search term or nearby landmark.', 'error');
       } finally {
         setLoading(false);
       }

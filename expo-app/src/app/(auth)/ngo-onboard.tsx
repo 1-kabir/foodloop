@@ -15,6 +15,7 @@ import { ShieldCheck, CaretLeft } from 'phosphor-react-native';
 import { useRouter } from 'expo-router';
 import { apiService } from '../../lib/api';
 import { useAuthStore } from '../../store/authStore';
+import { useToastStore } from '../../store/toastStore';
 import { colors, typography, spacing, radius } from '../../constants/theme';
 
 const TOTAL_STEPS = 3;
@@ -172,6 +173,7 @@ const sliderStyles = StyleSheet.create({
 
 export default function NGOOnboardScreen() {
   const { setOnboarded, updateUser, logout } = useAuthStore();
+  const { showToast } = useToastStore();
   const router = useRouter();
   const [step, setStep] = useState(1);
 
@@ -207,7 +209,7 @@ export default function NGOOnboardScreen() {
         setCoords(result);
         setStep(3);
       } catch (err) {
-        alert('Could not verify address location. Please check spelling or enter a nearby landmark.');
+        showToast('Could not verify address location. Try a different search term or nearby landmark.', 'error');
       } finally {
         setLoading(false);
       }

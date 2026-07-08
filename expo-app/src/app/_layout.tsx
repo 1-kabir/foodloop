@@ -6,6 +6,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
 import { useAuthStore } from '../store/authStore';
 import { apiService } from '../lib/api';
+import { Toast } from '../components/ui/Toast';
 import {
   PlusJakartaSans_400Regular,
   PlusJakartaSans_500Medium,
@@ -128,5 +129,10 @@ export default function RootLayout() {
 
   if (!ready) return null;
 
-  return <Slot />;
+  return (
+    <>
+      <Slot />
+      <Toast />
+    </>
+  );
 }
