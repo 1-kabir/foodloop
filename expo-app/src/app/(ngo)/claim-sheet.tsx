@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, Pressable, TextInput, ScrollView, Alert, ActivityIndicator, Linking } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, Pressable, TextInput, ScrollView, Alert, ActivityIndicator, Linking, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useListingStore } from '../../store/listingStore';
 import { useAuthStore } from '../../store/authStore';
@@ -7,6 +7,15 @@ import { api } from '../../lib/api';
 import { colors, typography, spacing, radius } from '../../constants/theme';
 import { Button } from '../../components/ui/Button';
 import { CaretLeft, MapPin } from 'phosphor-react-native';
+
+const showAlert = (title: string, message: string, callback?: () => void) => {
+  if (Platform.OS === 'web') {
+    alert(`${title}: ${message}`);
+    if (callback) callback();
+  } else {
+    Alert.alert(title, message, callback ? [{ text: 'OK', onPress: callback }] : undefined);
+  }
+};
 
 // "16:30" -> today at 16:30 local time, as ISO. Rolls to tomorrow if that
 // time has already passed today.
@@ -73,7 +82,7 @@ export default function ClaimSheetScreen() {
       ? `https://www.google.com/maps/search/?api=1&query=${listing.lat},${listing.lng}`
       : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(listing.donorAddress)}`;
     Linking.openURL(url).catch(() => {
-      Alert.alert('Could not open maps', 'There was an issue opening Google Maps.');
+      showAlert('Could not open maps', 'There was an issue opening Google Maps.');
     });
   };
 
@@ -83,7 +92,7 @@ export default function ClaimSheetScreen() {
     setSubmitting(false);
 
     if (result.error) {
-      Alert.alert('Could not claim this listing', result.error);
+      showAlert('Could not claim this listing', result.error);
       return;
     }
 
@@ -96,8 +105,9 @@ export default function ClaimSheetScreen() {
       data: { type: 'claim_confirmed', listingId: listing.id },
     }).catch(() => {});
 
-    Alert.alert('Claim confirmed', `You've reserved ${claimQty}kg of ${listing.foodName}. Find it in your Schedule.`);
-    router.back();
+    showAlert('Claim confirmed', `You've reserved ${claimQty}kg of ${listing.foodName}. Find it in your Schedule.`, () => {
+      router.back();
+    });
   };
 
   const incrementQty = () => {

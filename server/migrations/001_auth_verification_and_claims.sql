@@ -39,7 +39,7 @@ update public.users set verification_status = 'approved' where verified = true a
 --    caller can only create a claim for themselves via auth.uid().
 create or replace function public.create_claim(
   p_listing_id uuid,
-  p_qty_claimed_kg int,
+  p_qty_claimed_kg numeric,
   p_pickup_time timestamptz
 ) returns public.claims
 language plpgsql
@@ -51,12 +51,15 @@ declare
   v_claim public.claims%rowtype;
   v_new_remaining int;
   v_new_status text;
+  v_qty_int int;
 begin
   if auth.uid() is null then
     raise exception 'Authentication required';
   end if;
 
-  if p_qty_claimed_kg is null or p_qty_claimed_kg <= 0 then
+  v_qty_int := p_qty_claimed_kg::int;
+
+  if v_qty_int is null or v_qty_int <= 0 then
     raise exception 'qty_claimed_kg must be positive';
   end if;
 
@@ -71,11 +74,11 @@ begin
     raise exception 'Listing is no longer available';
   end if;
 
-  if v_listing.qty_remaining_kg < p_qty_claimed_kg then
-    raise exception 'Requested quantity (%) exceeds available quantity (%)', p_qty_claimed_kg, v_listing.qty_remaining_kg;
+  if v_listing.qty_remaining_kg < v_qty_int then
+    raise exception 'Requested quantity (%) exceeds available quantity (%)', v_qty_int, v_listing.qty_remaining_kg;
   end if;
 
-  v_new_remaining := v_listing.qty_remaining_kg - p_qty_claimed_kg;
+  v_new_remaining := v_listing.qty_remaining_kg - v_qty_int;
   v_new_status := case when v_new_remaining <= 0 then 'fully_claimed' else 'partial' end;
 
   update public.listings
@@ -83,14 +86,14 @@ begin
     where id = p_listing_id;
 
   insert into public.claims (listing_id, ngo_id, qty_claimed_kg, pickup_time, qr_token)
-    values (p_listing_id, auth.uid(), p_qty_claimed_kg, p_pickup_time, encode(gen_random_bytes(16), 'hex'))
+    values (p_listing_id, auth.uid(), v_qty_int, p_pickup_time, encode(gen_random_bytes(16), 'hex'))
     returning * into v_claim;
 
   return v_claim;
 end;
 $$;
 
-grant execute on function public.create_claim(uuid, int, timestamptz) to authenticated;
+grant execute on function public.create_claim(uuid, numeric, timestamptz) to authenticated;
 
 -- 4. Storage bucket for listing photos (donor list-food.tsx uploads here
 --    directly from the device before insert). Public read so photos render
@@ -100,9 +103,11 @@ insert into storage.buckets (id, name, public)
   values ('listing-photos', 'listing-photos', true)
   on conflict (id) do nothing;
 
+drop policy if exists "Public read listing photos" on storage.objects;
 create policy "Public read listing photos" on storage.objects
   for select using (bucket_id = 'listing-photos');
 
+drop policy if exists "Authenticated users upload own listing photos" on storage.objects;
 create policy "Authenticated users upload own listing photos" on storage.objects
   for insert with check (
     bucket_id = 'listing-photos'
