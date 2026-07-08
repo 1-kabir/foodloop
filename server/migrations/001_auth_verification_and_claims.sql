@@ -86,7 +86,7 @@ begin
     where id = p_listing_id;
 
   insert into public.claims (listing_id, ngo_id, qty_claimed_kg, pickup_time, qr_token)
-    values (p_listing_id, auth.uid(), v_qty_int, p_pickup_time, encode(gen_random_bytes(16), 'hex'))
+    values (p_listing_id, auth.uid(), v_qty_int, p_pickup_time, replace(gen_random_uuid()::text, '-', ''))
     returning * into v_claim;
 
   return v_claim;
