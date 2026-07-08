@@ -25,6 +25,10 @@ export const Toast: React.FC = () => {
     }
   }, [visible]);
 
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
+
   if (!visible && translateY.value === 150) return null;
 
   const getToastConfig = () => {
@@ -52,10 +56,6 @@ export const Toast: React.FC = () => {
 
   const config = getToastConfig();
   const Icon = config.Icon;
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-  }));
 
   return (
     <Animated.View style={[styles.container, animatedStyle]}>
