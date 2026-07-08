@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, Pressable, TextInput, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, Pressable, TextInput, ScrollView, Alert, ActivityIndicator, Linking } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useListingStore } from '../../store/listingStore';
 import { useAuthStore } from '../../store/authStore';
 import { api } from '../../lib/api';
 import { colors, typography, spacing, radius } from '../../constants/theme';
 import { Button } from '../../components/ui/Button';
-import { CaretLeft } from 'phosphor-react-native';
+import { CaretLeft, MapPin } from 'phosphor-react-native';
 
 // "16:30" -> today at 16:30 local time, as ISO. Rolls to tomorrow if that
 // time has already passed today.
@@ -68,6 +68,15 @@ export default function ClaimSheetScreen() {
     );
   }
 
+  const handleOpenMaps = () => {
+    const url = listing.lat && listing.lng
+      ? `https://www.google.com/maps/search/?api=1&query=${listing.lat},${listing.lng}`
+      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(listing.donorAddress)}`;
+    Linking.openURL(url).catch(() => {
+      Alert.alert('Could not open maps', 'There was an issue opening Google Maps.');
+    });
+  };
+
   const handleClaim = async () => {
     setSubmitting(true);
     const result = await claimListing(listing.id, claimQty, timeStringToIso(pickupTime));
@@ -111,9 +120,24 @@ export default function ClaimSheetScreen() {
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.summaryCard}>
-          <Text style={styles.foodName}>{listing.foodName}</Text>
-          <Text style={styles.donorName}>from {listing.donorName}</Text>
-          <Text style={styles.qtyAvailable}>{listing.qty} kg available</Text>
+          <View style={{ flex: 1, gap: 4 }}>
+            <Text style={styles.foodName}>{listing.foodName}</Text>
+            <Text style={styles.donorName}>from {listing.donorName}</Text>
+            <Text style={styles.qtyAvailable}>{listing.qty} kg available</Text>
+            {listing.donorAddress ? (
+              <View style={styles.addressRow}>
+                <MapPin size={14} color={colors.neutral400} />
+                <Text style={styles.addressText} numberOfLines={2}>
+                  {listing.donorAddress}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+          {listing.donorAddress ? (
+            <Pressable style={styles.mapBtn} onPress={handleOpenMaps}>
+              <MapPin size={18} color={colors.blue500} weight="fill" />
+            </Pressable>
+          ) : null}
         </View>
 
         {/* Quantity selector with increments */}
@@ -191,6 +215,32 @@ const styles = StyleSheet.create({
     marginBottom: spacing.s32,
     borderWidth: 1,
     borderColor: colors.blue100,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  addressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 8,
+  },
+  addressText: {
+    fontFamily: typography.fonts.regular,
+    fontSize: 12,
+    color: colors.neutral600,
+    flex: 1,
+  },
+  mapBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.blue100,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   foodName: {
     fontFamily: typography.fonts.bold,

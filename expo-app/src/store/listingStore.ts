@@ -13,6 +13,7 @@ export interface Listing {
   id: string;
   donorId: string;
   donorName: string;
+  donorAddress: string;
   foodName: string;
   category: string;
   qty: number; // qty_remaining_kg — what's actually still claimable
@@ -63,6 +64,7 @@ export function timeRemainingFromExpiry(expiryAt: string): string {
 // (readable to everyone per the "Allow public read profiles" RLS policy)
 // rather than requiring a Postgres join for every row.
 const donorNameCache = new Map<string, string>();
+const donorAddressCache = new Map<string, string>();
 
 async function resolveDonorName(donorId: string): Promise<string> {
   if (donorNameCache.has(donorId)) return donorNameCache.get(donorId)!;
@@ -72,7 +74,15 @@ async function resolveDonorName(donorId: string): Promise<string> {
   return name;
 }
 
-function rowToListing(row: ListingRow, donorName: string): Listing {
+async function resolveDonorAddress(donorId: string): Promise<string> {
+  if (donorAddressCache.has(donorId)) return donorAddressCache.get(donorId)!;
+  const { data } = await supabase.from('users').select('address').eq('id', donorId).single();
+  const address = data?.address ?? '';
+  donorAddressCache.set(donorId, address);
+  return address;
+}
+
+function rowToListing(row: ListingRow, donorName: string, donorAddress: string): Listing {
   const viewer = useAuthStore.getState().user;
   const distance =
     viewer?.lat != null && viewer?.lng != null && row.lat != null && row.lng != null
@@ -90,6 +100,7 @@ function rowToListing(row: ListingRow, donorName: string): Listing {
     id: row.id,
     donorId: row.donor_id,
     donorName,
+    donorAddress,
     foodName: row.food_name,
     category: row.category,
     qty: row.qty_remaining_kg,
@@ -149,8 +160,14 @@ export const useListingStore = create<ListingState>((set, get) => ({
     }
 
     const rows = (data ?? []) as ListingRow[];
-    const names = await Promise.all(rows.map((r) => resolveDonorName(r.donor_id)));
-    set({ listings: rows.map((r, i) => rowToListing(r, names[i])), isLoading: false });
+    const details = await Promise.all(rows.map(async (r) => {
+      const [name, address] = await Promise.all([
+        resolveDonorName(r.donor_id),
+        resolveDonorAddress(r.donor_id),
+      ]);
+      return { name, address };
+    }));
+    set({ listings: rows.map((r, i) => rowToListing(r, details[i].name, details[i].address)), isLoading: false });
   },
 
   subscribeRealtime: () => {
@@ -167,8 +184,11 @@ export const useListingStore = create<ListingState>((set, get) => ({
             return;
           }
           const row = payload.new as ListingRow;
-          const name = await resolveDonorName(row.donor_id);
-          const listing = rowToListing(row, name);
+          const [name, address] = await Promise.all([
+            resolveDonorName(row.donor_id),
+            resolveDonorAddress(row.donor_id),
+          ]);
+          const listing = rowToListing(row, name, address);
           set((state) => {
             const exists = state.listings.some((l) => l.id === listing.id);
             return {
@@ -217,7 +237,7 @@ export const useListingStore = create<ListingState>((set, get) => ({
     if (error) return { error: error.message };
 
     const row = data as ListingRow;
-    const listing = rowToListing(row, user.name);
+    const listing = rowToListing(row, user.name ?? '', user.address ?? '');
     set((state) => ({ listings: [listing, ...state.listings] }));
     return { id: row.id };
   },
