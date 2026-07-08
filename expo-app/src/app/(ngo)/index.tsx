@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, Pressable } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useAuthStore } from '../../store/authStore';
 import { useListingStore } from '../../store/listingStore';
 import { colors, typography, spacing, radius } from '../../constants/theme';
@@ -14,6 +15,7 @@ function getGreeting(): string {
 }
 
 export default function NGODashboard() {
+  const router = useRouter();
   const { user } = useAuthStore();
   const { listings, fetchListings, subscribeRealtime, unsubscribeRealtime } = useListingStore();
   const [stats, setStats] = useState<ImpactStats | null>(null);
@@ -64,7 +66,9 @@ export default function NGODashboard() {
         <Text style={styles.sectionTitle}>Urgent Available</Text>
         <View style={styles.list}>
           {availableFood.map(listing => (
-            <FoodCard key={listing.id} listing={listing} />
+            <Pressable key={listing.id} onPress={() => router.push(`/(ngo)/claim-sheet?id=${listing.id}` as any)}>
+              <FoodCard listing={listing} />
+            </Pressable>
           ))}
         </View>
       </ScrollView>
