@@ -124,7 +124,7 @@ export default function DonorOnboardScreen() {
   const [step, setStep] = useState(1);
 
   // Step 1
-  const [name, setName] = useState('');
+  const [name, setName] = useState(useAuthStore.getState().user?.name || '');
   const [orgType, setOrgType] = useState('Restaurant');
 
   // Step 2 — geocoded eagerly (to validate the address) but only persisted

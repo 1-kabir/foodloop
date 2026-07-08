@@ -48,6 +48,7 @@ function rowToUser(row: UserRow): User {
 
 interface AuthResult {
   error?: string;
+  needsEmailVerification?: boolean;
 }
 
 interface AuthState {
@@ -71,9 +72,17 @@ interface AuthState {
     pickupRadiusKm: number;
     expoPushToken: string;
   }>) => Promise<AuthResult>;
+  updateUserProfile: (data: Partial<{
+    name: string;
+    address: string;
+    orgType: string;
+    registrationNumber: string;
+    maxCapacityKg: number;
+  }>) => Promise<AuthResult>;
   setOnboarded: () => Promise<void>;
   submitVerification: () => Promise<void>;
   approveVerification: () => Promise<void>;
+  resendConfirmationEmail: () => Promise<AuthResult>;
   refreshUser: () => Promise<void>;
 }
 
@@ -127,13 +136,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   signUp: async ({ email, password, type, name }) => {
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { type, name } },
+    });
     if (error) return { error: error.message };
-    if (!data.user) return { error: 'Sign up did not return a user. Check your inbox to confirm your email if confirmation is required.' };
+    if (!data.user) return { error: 'Sign up failed. Please try again.' };
 
-    // Create the matching profile row. RLS policy "Allow users to insert own
-    // profile" requires auth.uid() = id, which holds here since we're still
-    // authenticated as the user we just created.
+    // When email confirmation is enabled Supabase returns a user but session
+    // is null — we must wait for the user to click the link before we can
+    // write to protected tables. Signal this to the caller.
+    if (!data.session) {
+      // Store the partial session so resendConfirmationEmail can read the email
+      set({ session: null, user: null });
+      return { needsEmailVerification: true };
+    }
+
+    // Email confirmation is disabled — create the profile row immediately.
     const { data: profileRow, error: profileError } = await supabase
       .from('users')
       .insert({ id: data.user.id, email, type, name })
@@ -186,6 +206,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     return {};
   },
 
+  updateUserProfile: async (patch) => {
+    return get().updateUser(patch);
+  },
+
   setOnboarded: async () => {
     const { user } = get();
     if (!user) return;
@@ -224,6 +248,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       .select()
       .single();
     if (!error && data) set({ user: rowToUser(data as UserRow) });
+  },
+
+  resendConfirmationEmail: async () => {
+    const { session } = get();
+    const email = session?.user?.email;
+    if (!email) return { error: 'No email address found on your account.' };
+    const { error } = await supabase.auth.resend({ type: 'signup', email });
+    if (error) return { error: error.message };
+    return {};
   },
 
   refreshUser: async () => {

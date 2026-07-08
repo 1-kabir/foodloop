@@ -4,7 +4,9 @@ import { Slot, useRouter, useSegments } from 'expo-router';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
+import * as Linking from 'expo-linking';
 import { useAuthStore } from '../store/authStore';
+import { supabase } from '../lib/supabase';
 import { apiService } from '../lib/api';
 import { Toast } from '../components/ui/Toast';
 import {
@@ -72,6 +74,62 @@ export default function RootLayout() {
     initialize();
   }, []);
 
+  // Handle Supabase email confirmation deep links.
+  // When the user taps the verification link, Supabase redirects to
+  // foodloop://... with a token_hash query param (PKCE flow) or
+  // access_token in the hash fragment (implicit flow).
+  // We parse whichever is present and exchange it for a live session.
+  useEffect(() => {
+    const handleUrl = async (url: string) => {
+      try {
+        // Parse query params from the URL
+        const queryString = url.includes('?') ? url.split('?')[1] : '';
+        const params = new URLSearchParams(queryString);
+        const tokenHash = params.get('token_hash');
+        const type = params.get('type') as 'signup' | 'recovery' | null;
+
+        if (tokenHash && type) {
+          // PKCE / OTP flow — exchange the token hash for a session
+          const { error } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type,
+          });
+          if (!error) {
+            await useAuthStore.getState().refreshUser();
+          }
+          return;
+        }
+
+        // Implicit flow — access_token is in the URL hash fragment
+        const hashString = url.includes('#') ? url.split('#')[1] : '';
+        const hashParams = new URLSearchParams(hashString);
+        const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
+
+        if (accessToken && refreshToken) {
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          if (!error) {
+            await useAuthStore.getState().refreshUser();
+          }
+        }
+      } catch (_) {
+        // Not all deep links are auth callbacks — ignore parse failures.
+      }
+    };
+
+    // Handle URLs that launched the app (cold start)
+    Linking.getInitialURL().then((url) => {
+      if (url) handleUrl(url);
+    });
+
+    // Handle URLs received while the app is already open (warm)
+    const sub = Linking.addEventListener('url', ({ url }) => handleUrl(url));
+    return () => sub.remove();
+  }, []);
+
   // Registers this device's push token once the user is fully set up — not
   // during onboarding/verification, so we're not asking for a permission
   // before the user has any reason to trust the app yet.
@@ -96,8 +154,12 @@ export default function RootLayout() {
     const currentScreen = segments[1] ?? '';
 
     if (!user) {
-      // No user — go to login
+      // No user — go to login, but allow the email-verification holding screen
+      // to stay mounted while the user goes to their inbox.
       if (!inAuthGroup) router.replace('/(auth)');
+      else if (currentScreen !== 'verify-email' && currentScreen !== '') {
+        // they're in auth already, leave them alone
+      }
       return;
     }
 

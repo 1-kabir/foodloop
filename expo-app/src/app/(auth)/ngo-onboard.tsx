@@ -178,7 +178,7 @@ export default function NGOOnboardScreen() {
   const [step, setStep] = useState(1);
 
   // Step 1
-  const [orgName, setOrgName] = useState('');
+  const [orgName, setOrgName] = useState(useAuthStore.getState().user?.name || '');
   const [regNumber, setRegNumber] = useState('');
 
   // Step 2 — geocoded eagerly to validate the address, persisted only in the

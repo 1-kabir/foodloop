@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '../../store/authStore';
+import { useToastStore } from '../../store/toastStore';
 import { colors, typography, spacing, radius } from '../../constants/theme';
 import {
   CaretLeft,
@@ -83,9 +84,30 @@ export default function NGOSettingsScreen() {
               {user?.name?.charAt(0).toUpperCase() ?? '?'}
             </Text>
           </View>
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={styles.profileName}>{user?.name}</Text>
             <Text style={styles.profileEmail}>{user?.email}</Text>
+            <View style={styles.verifyBadgeRow}>
+              <View style={[styles.verifyStatusIndicator, { backgroundColor: user?.verified ? colors.green : colors.amber }]} />
+              <Text style={[styles.verifyStatusText, { color: user?.verified ? colors.green : colors.amber }]}>
+                {user?.verified ? 'Email Verified ✓' : 'Email Pending Verification'}
+              </Text>
+            </View>
+            {!user?.verified && (
+              <Pressable 
+                onPress={async () => {
+                  const { error } = await useAuthStore.getState().resendConfirmationEmail();
+                  if (error) {
+                    useToastStore.getState().showToast(error, 'error');
+                  } else {
+                    useToastStore.getState().showToast('Verification email resent successfully!', 'success');
+                  }
+                }}
+                style={styles.resendBtn}
+              >
+                <Text style={styles.resendBtnText}>Resend email</Text>
+              </Pressable>
+            )}
           </View>
           <View style={[styles.typeBadge, { backgroundColor: colors.verified + '18' }]}>
             <Text style={[styles.typeBadgeText, { color: colors.verified }]}>NGO</Text>
@@ -98,12 +120,14 @@ export default function NGOSettingsScreen() {
             icon={<UserCircle color={colors.blue400} size={20} weight="regular" />}
             label="Edit Profile"
             sublabel="Contact info and address"
+            onPress={() => router.push('/(ngo)/edit-profile' as any)}
           />
           <View style={styles.divider} />
           <SettingsRow
             icon={<Buildings color={colors.blue400} size={20} weight="regular" />}
             label="Organisation Details"
             sublabel="Registration, capacity, food preferences"
+            onPress={() => router.push('/(ngo)/org-details' as any)}
           />
         </View>
 
@@ -216,6 +240,34 @@ const styles = StyleSheet.create({
     fontFamily: typography.fonts.regular,
     fontSize: typography.size.xs.fontSize,
     color: colors.neutral400,
+    marginBottom: 4,
+  },
+  verifyBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  verifyStatusIndicator: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  verifyStatusText: {
+    fontFamily: typography.fonts.medium,
+    fontSize: 11,
+  },
+  resendBtn: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.blue100,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  resendBtnText: {
+    fontFamily: typography.fonts.semiBold,
+    fontSize: 10,
+    color: colors.blue600,
   },
   typeBadge: {
     marginLeft: 'auto',

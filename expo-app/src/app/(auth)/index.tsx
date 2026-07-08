@@ -18,6 +18,7 @@ import Animated, {
   interpolate,
 } from 'react-native-reanimated';
 
+import { useRouter } from 'expo-router';
 import { useAuthStore } from '../../store/authStore';
 import { useToastStore } from '../../store/toastStore';
 import { colors, typography, spacing, radius } from '../../constants/theme';
@@ -81,6 +82,7 @@ export default function LoginScreen() {
   const [name, setName] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const { signIn, signUp } = useAuthStore();
+  const router = useRouter();
 
   const isSignup = authMode === 'signup';
 
@@ -115,8 +117,11 @@ export default function LoginScreen() {
 
     if (result.error) {
       showToast(result.error, 'error');
+    } else if (result.needsEmailVerification) {
+      // Supabase requires email confirmation — go to the pending screen
+      router.replace('/(auth)/verify-email' as any);
     } else if (isSignup) {
-      showToast('Account created successfully! Let\'s setup onboarding.', 'success');
+      showToast('Account created! Let\'s set up your profile.', 'success');
     } else {
       showToast('Welcome back to FoodLoop!', 'success');
     }
