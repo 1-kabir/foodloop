@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, Pressable } from 'react-native';
 import { useAuthStore } from '../../store/authStore';
 import { useListingStore } from '../../store/listingStore';
@@ -7,9 +7,15 @@ import { FoodCard } from '../../components/FoodCard';
 
 export default function MyDonationsFeed() {
   const { user } = useAuthStore();
-  const { listings } = useListingStore();
-  
-  const myDonations = listings.filter(l => l.donorName === user?.name || l.status === 'claimed');
+  const { listings, fetchListings, subscribeRealtime, unsubscribeRealtime } = useListingStore();
+
+  useEffect(() => {
+    fetchListings();
+    subscribeRealtime();
+    return () => unsubscribeRealtime();
+  }, []);
+
+  const myDonations = listings.filter((l) => l.donorId === user?.id);
 
   return (
     <SafeAreaView style={styles.container}>

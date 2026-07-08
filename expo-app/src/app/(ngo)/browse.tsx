@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, Pressable, TextInput } from 'react-native';
 import { useListingStore } from '../../store/listingStore';
 import { colors, typography, spacing, radius } from '../../constants/theme';
@@ -10,16 +10,24 @@ const CATEGORIES = ['All', 'Cooked Meals', 'Raw Produce', 'Packaged Goods', 'Bev
 
 export default function NGOBrowseScreen() {
   const router = useRouter();
-  const { listings } = useListingStore();
+  const { listings, fetchListings, subscribeRealtime, unsubscribeRealtime } = useListingStore();
   const [activeCategory, setActiveCategory] = useState('All');
-  
+
   // Custom Filter Parameters (Spec Point 2)
   const [searchQuery, setSearchQuery] = useState('');
   const [minQty, setMinQty] = useState('');
   const [showFilters, setShowFilters] = useState(false);
-  const [maxDistance, setMaxDistance] = useState(10); // Simulated km
+  const [maxDistance, setMaxDistance] = useState(10);
 
-  const availableFood = listings.filter(l => l.status === 'available');
+  useEffect(() => {
+    fetchListings();
+    subscribeRealtime();
+    return () => unsubscribeRealtime();
+  }, []);
+
+  // 'partial' listings still have qty remaining and are still claimable —
+  // only fully_claimed/collected/expired should drop out of the feed.
+  const availableFood = listings.filter((l) => l.status === 'available' || l.status === 'partial');
 
   const filteredFood = availableFood.filter(l => {
     // Search query match
@@ -27,14 +35,15 @@ export default function NGOBrowseScreen() {
       return false;
     }
     // Category match
-    if (activeCategory !== 'All' && l.category !== activeCategory && (activeCategory === 'Raw Produce' ? l.category !== 'Raw' : true)) {
+    if (activeCategory !== 'All' && l.category !== activeCategory) {
       return false;
     }
     // Min Quantity match
     if (minQty && l.qty < parseInt(minQty)) {
       return false;
     }
-    // Distance matching (simulated distance comparison)
+    // Distance filter — listings without a resolvable distance (no viewer
+    // location yet) are kept rather than silently hidden.
     const distanceVal = parseFloat(l.distance);
     if (!isNaN(distanceVal) && distanceVal > maxDistance) {
       return false;

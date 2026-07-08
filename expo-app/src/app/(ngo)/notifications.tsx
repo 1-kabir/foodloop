@@ -1,35 +1,85 @@
-import React from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { colors, typography, spacing, radius } from '../../constants/theme';
 import { CaretLeft, Bell } from 'phosphor-react-native';
+import { useClaimStore } from '../../store/claimStore';
+import { useListingStore } from '../../store/listingStore';
+import { useAuthStore } from '../../store/authStore';
 
-const NOTIFICATIONS = [
-  {
-    id: '1',
-    title: 'New Food Available',
-    message: 'Local Cafe listed 15kg of Chicken Biryani nearby.',
-    time: '2 hours ago',
-    unread: true,
-  },
-  {
-    id: '2',
-    title: 'Verification Complete',
-    message: 'Your organisation profile has been approved! Start browse and claiming surplus food.',
-    time: '1 day ago',
-    unread: false,
-  },
-  {
-    id: '3',
-    title: 'Welcome to FoodLoop',
-    message: 'Thanks for joining! Let\'s coordinate and reduce hunger together.',
-    time: '2 days ago',
-    unread: false,
-  },
-];
+function timeAgo(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(ms / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
 
+// Real activity feed: this NGO's own claims plus the most recent nearby
+// listings — no hardcoded copy, no separate notifications table.
 export default function NotificationsScreen() {
   const router = useRouter();
+  const { user } = useAuthStore();
+  const { claims, fetchMyClaims } = useClaimStore();
+  const { listings, fetchListings } = useListingStore();
+
+  useEffect(() => {
+    fetchMyClaims();
+    fetchListings();
+  }, []);
+
+  const items = useMemo(() => {
+    const entries: { id: string; title: string; message: string; time: string; unread: boolean }[] = [];
+
+    for (const c of claims) {
+      if (c.status === 'completed' && c.completedAt) {
+        entries.push({
+          id: `${c.id}-completed`,
+          title: 'Pickup Verified',
+          message: `You picked up ${c.qtyClaimedKg}kg of ${c.foodName} from ${c.donorName}.`,
+          time: c.completedAt,
+          unread: false,
+        });
+      } else {
+        entries.push({
+          id: `${c.id}-confirmed`,
+          title: 'Claim Confirmed',
+          message: `You claimed ${c.qtyClaimedKg}kg of ${c.foodName} from ${c.donorName}.`,
+          time: c.createdAt,
+          unread: true,
+        });
+      }
+    }
+
+    const recentListings = [...listings]
+      .filter((l) => l.status === 'available' || l.status === 'partial')
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 5);
+    for (const l of recentListings) {
+      entries.push({
+        id: `${l.id}-new`,
+        title: 'New Food Available',
+        message: `${l.donorName} listed ${l.totalQty}kg of ${l.foodName} nearby.`,
+        time: l.createdAt,
+        unread: false,
+      });
+    }
+
+    if (user?.createdAt) {
+      entries.push({
+        id: 'welcome',
+        title: 'Welcome to FoodLoop',
+        message: "Thanks for joining! Let's coordinate and reduce hunger together.",
+        time: user.createdAt,
+        unread: false,
+      });
+    }
+
+    return entries.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+  }, [claims, listings, user?.createdAt]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -42,7 +92,10 @@ export default function NotificationsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {NOTIFICATIONS.map(n => (
+        {items.length === 0 && (
+          <Text style={styles.notifMessage}>Nothing yet — nearby donations will show up here.</Text>
+        )}
+        {items.map(n => (
           <View key={n.id} style={[styles.notifCard, n.unread && styles.notifCardUnread]}>
             <View style={styles.iconCol}>
               <Bell color={n.unread ? colors.blue500 : colors.neutral400} size={20} weight={n.unread ? 'fill' : 'regular'} />
@@ -50,7 +103,7 @@ export default function NotificationsScreen() {
             <View style={styles.textCol}>
               <View style={styles.titleRow}>
                 <Text style={styles.notifTitle}>{n.title}</Text>
-                <Text style={styles.notifTime}>{n.time}</Text>
+                <Text style={styles.notifTime}>{timeAgo(n.time)}</Text>
               </View>
               <Text style={styles.notifMessage}>{n.message}</Text>
             </View>

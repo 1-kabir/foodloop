@@ -1,32 +1,96 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, Pressable, Modal } from 'react-native';
-import { useListingStore } from '../../store/listingStore';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, Pressable, Modal, Alert } from 'react-native';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import { useClaimStore, Claim } from '../../store/claimStore';
 import { colors, typography, spacing, radius, shadows } from '../../constants/theme';
-import { FoodCard } from '../../components/FoodCard';
 import { Camera, Check, X } from 'phosphor-react-native';
 
-const DAYS = [
-  { label: 'M', day: '06' },
-  { label: 'T', day: '07' },
-  { label: 'W', day: '08', active: true },
-  { label: 'T', day: '09' },
-  { label: 'F', day: '10' },
-  { label: 'S', day: '11' },
-  { label: 'S', day: '12' },
-];
+function getCurrentWeekDays(): { label: string; day: string; date: Date }[] {
+  const today = new Date();
+  const dayOfWeek = today.getDay(); // 0 = Sunday
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - ((dayOfWeek + 6) % 7));
+  const labels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  return labels.map((label, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    return { label, day: String(d.getDate()).padStart(2, '0'), date: d };
+  });
+}
+
+function isSameDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+function ClaimCard({ claim }: { claim: Claim }) {
+  return (
+    <View style={claimCardStyles.card}>
+      <Text style={claimCardStyles.food}>{claim.foodName}</Text>
+      <Text style={claimCardStyles.meta}>from {claim.donorName} • {claim.qtyClaimedKg} kg</Text>
+    </View>
+  );
+}
+
+const claimCardStyles = StyleSheet.create({
+  card: {
+    backgroundColor: colors.neutral50,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: colors.neutral100,
+    padding: 16,
+  },
+  food: {
+    fontFamily: typography.fonts.semiBold,
+    fontSize: typography.size.md.fontSize,
+    color: colors.neutral900,
+    marginBottom: 4,
+  },
+  meta: {
+    fontFamily: typography.fonts.regular,
+    fontSize: typography.size.sm.fontSize,
+    color: colors.neutral600,
+  },
+});
 
 export default function NGOScheduleScreen() {
-  const { listings, claimListing } = useListingStore();
-  const claimedFood = listings.filter(l => l.status === 'claimed');
+  const { claims, fetchMyClaims, subscribeRealtime, unsubscribeRealtime, verifyPickup } = useClaimStore();
+  const [permission, requestPermission] = useCameraPermissions();
+  const weekDays = getCurrentWeekDays();
 
-  // Simulated scan camera mockup
   const [scanVisible, setScanVisible] = useState(false);
   const [successVisible, setSuccessVisible] = useState(false);
-  const [selectedDay, setSelectedDay] = useState('08');
+  const [scanning, setScanning] = useState(true);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
-  const handleScanMock = (id: string) => {
-    // Complete the loop statefully
-    claimListing(id); // Set status to claimed/collected mock
+  useEffect(() => {
+    fetchMyClaims();
+    subscribeRealtime('ngo');
+    return () => unsubscribeRealtime();
+  }, []);
+
+  const claimedFood = claims
+    .filter((c) => c.status === 'confirmed' && isSameDay(new Date(c.pickupTime), selectedDate))
+    .sort((a, b) => new Date(a.pickupTime).getTime() - new Date(b.pickupTime).getTime());
+
+  const openScanner = async () => {
+    if (!permission?.granted) {
+      const result = await requestPermission();
+      if (!result.granted) return;
+    }
+    setScanning(true);
+    setScanVisible(true);
+  };
+
+  const handleBarcodeScanned = async ({ data }: { data: string }) => {
+    if (!scanning) return;
+    setScanning(false);
+    const result = await verifyPickup(data);
+
+    if (result.error) {
+      Alert.alert('Could not verify pickup', result.error, [{ text: 'Try again', onPress: () => setScanning(true) }]);
+      return;
+    }
+
     setScanVisible(false);
     setSuccessVisible(true);
   };
@@ -39,31 +103,36 @@ export default function NGOScheduleScreen() {
 
       {/* Weekly segment calendar view */}
       <View style={styles.calendarStrip}>
-        {DAYS.map(d => (
-          <Pressable 
-            key={d.day} 
-            style={[styles.calDay, selectedDay === d.day && styles.calDayActive]}
-            onPress={() => setSelectedDay(d.day)}
-          >
-            <Text style={[styles.calLabel, selectedDay === d.day && styles.calLabelActive]}>{d.label}</Text>
-            <Text style={[styles.calNum, selectedDay === d.day && styles.calNumActive]}>{d.day}</Text>
-          </Pressable>
-        ))}
+        {weekDays.map((d) => {
+          const active = isSameDay(d.date, selectedDate);
+          return (
+            <Pressable
+              key={d.date.toISOString()}
+              style={[styles.calDay, active && styles.calDayActive]}
+              onPress={() => setSelectedDate(d.date)}
+            >
+              <Text style={[styles.calLabel, active && styles.calLabelActive]}>{d.label}</Text>
+              <Text style={[styles.calNum, active && styles.calNumActive]}>{d.day}</Text>
+            </Pressable>
+          );
+        })}
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {claimedFood.length > 0 ? (
           <View style={styles.list}>
-            {claimedFood.map(listing => (
-              <View key={listing.id} style={styles.scheduleItem}>
+            {claimedFood.map(claim => (
+              <View key={claim.id} style={styles.scheduleItem}>
                 <View style={styles.timeline}>
                   <View style={styles.timelineDot} />
                   <View style={styles.timelineLine} />
                 </View>
                 <View style={styles.cardContainer}>
-                  <Text style={styles.timeLabel}>Today • 4:00 PM</Text>
-                  <FoodCard listing={listing} />
-                  <Pressable style={styles.scanBtn} onPress={() => setScanVisible(true)}>
+                  <Text style={styles.timeLabel}>
+                    {new Date(claim.pickupTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                  <ClaimCard claim={claim} />
+                  <Pressable style={styles.scanBtn} onPress={openScanner}>
                     <Camera color={colors.white} size={18} weight="bold" />
                     <Text style={styles.scanBtnText}>Verify Collection</Text>
                   </Pressable>
@@ -73,12 +142,12 @@ export default function NGOScheduleScreen() {
           </View>
         ) : (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>No pickups scheduled for today.</Text>
+            <Text style={styles.emptyText}>No pickups scheduled for this day.</Text>
           </View>
         )}
       </ScrollView>
 
-      {/* Simulated Scanner camera mockup modal */}
+      {/* Real camera-based QR scanner */}
       <Modal visible={scanVisible} transparent animationType="slide">
         <View style={styles.modalScrim}>
           <View style={styles.scannerWindow}>
@@ -89,15 +158,16 @@ export default function NGOScheduleScreen() {
               </Pressable>
             </View>
             <View style={styles.cameraBox}>
-              <View style={styles.focusFrame} />
+              {permission?.granted ? (
+                <CameraView
+                  style={StyleSheet.absoluteFill}
+                  barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+                  onBarcodeScanned={scanning ? handleBarcodeScanned : undefined}
+                />
+              ) : null}
+              <View style={styles.focusFrame} pointerEvents="none" />
               <Text style={styles.cameraSub}>Align QR code inside frame</Text>
             </View>
-
-            {claimedFood.length > 0 && (
-              <Pressable style={styles.mockSuccessBtn} onPress={() => handleScanMock(claimedFood[0].id)}>
-                <Text style={styles.mockSuccessText}>Simulate Successful Scan</Text>
-              </Pressable>
-            )}
           </View>
         </View>
       </Modal>
@@ -265,6 +335,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
+    position: 'relative',
   },
   focusFrame: {
     width: 140,

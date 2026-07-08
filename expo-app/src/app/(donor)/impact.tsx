@@ -1,38 +1,66 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, Modal, Pressable } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, Modal, Pressable, ActivityIndicator } from 'react-native';
 import { colors, typography, spacing, radius, shadows } from '../../constants/theme';
 import { Button } from '../../components/ui/Button';
 import { X, ShareNetwork } from 'phosphor-react-native';
+import { useAuthStore } from '../../store/authStore';
+import { apiService, ImpactStats } from '../../lib/api';
+
+function daysActiveSince(iso: string | null): number {
+  if (!iso) return 0;
+  return Math.max(1, Math.floor((Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24)));
+}
 
 export default function DonorImpactScreen() {
+  const { user } = useAuthStore();
   const [shareVisible, setShareVisible] = useState(false);
+  const [stats, setStats] = useState<ImpactStats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user) return;
+    setLoading(true);
+    apiService
+      .getImpact(user.id)
+      .then(setStats)
+      .catch(() => setStats(null))
+      .finally(() => setLoading(false));
+  }, [user?.id]);
+
+  const daysActive = daysActiveSince(stats?.memberSince ?? user?.createdAt ?? null);
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.pageTitle}>FoodPrint</Text>
 
-        <View style={styles.heroSection}>
-          <Text style={styles.heroLabel}>Total food rescued</Text>
-          <Text style={styles.heroNumber}>
-            124<Text style={styles.heroUnit}> kg</Text>
-          </Text>
-        </View>
+        {loading ? (
+          <ActivityIndicator color={colors.blue400} style={{ marginTop: 40 }} />
+        ) : (
+          <>
+            <View style={styles.heroSection}>
+              <Text style={styles.heroLabel}>Total food rescued</Text>
+              <Text style={styles.heroNumber}>
+                {stats?.totalKg ?? 0}<Text style={styles.heroUnit}> kg</Text>
+              </Text>
+            </View>
 
-        <View style={styles.grid}>
-          <View style={[styles.gridItem, { flex: 1.4 }]}>
-            <Text style={styles.gridLabel}>Meals enabled</Text>
-            <Text style={styles.gridValue}>372</Text>
-          </View>
-          <View style={[styles.gridItem, { flex: 1 }]}>
-            <Text style={styles.gridLabel}>Days active</Text>
-            <Text style={styles.gridValue}>42</Text>
-          </View>
-          <View style={[styles.gridItem, { flex: 1 }]}>
-            <Text style={styles.gridLabel}>Partners</Text>
-            <Text style={styles.gridValue}>8</Text>
-          </View>
-        </View>
+            <View style={styles.grid}>
+              <View style={[styles.gridItem, { flex: 1.4 }]}>
+                <Text style={styles.gridLabel}>Meals enabled</Text>
+                <Text style={styles.gridValue}>{stats?.mealsEnabled ?? 0}</Text>
+              </View>
+              <View style={[styles.gridItem, { flex: 1 }]}>
+                <Text style={styles.gridLabel}>Days active</Text>
+                <Text style={styles.gridValue}>{daysActive}</Text>
+              </View>
+              <View style={[styles.gridItem, { flex: 1 }]}>
+                <Text style={styles.gridLabel}>Partners</Text>
+                <Text style={styles.gridValue}>{stats?.partnerCount ?? 0}</Text>
+              </View>
+            </View>
+          </>
+        )}
 
         <View style={{ marginTop: spacing.s40 }}>
           <Button variant="outline" label="Share milestone" onPress={() => setShareVisible(true)} />
@@ -55,8 +83,10 @@ export default function DonorImpactScreen() {
               <View style={styles.milestoneCircle}>
                 <ShareNetwork color={colors.white} size={28} weight="bold" />
               </View>
-              <Text style={styles.graphicTitle}>124 KG RESCUED</Text>
-              <Text style={styles.graphicSub}>I've rescued 124 kg of surplus food and enabled 372 meals using FoodLoop!</Text>
+              <Text style={styles.graphicTitle}>{stats?.totalKg ?? 0} KG RESCUED</Text>
+              <Text style={styles.graphicSub}>
+                I've rescued {stats?.totalKg ?? 0} kg of surplus food and enabled {stats?.mealsEnabled ?? 0} meals using FoodLoop!
+              </Text>
               <View style={styles.graphicLogo}>
                 <Text style={styles.graphicLogoText}>FoodLoop</Text>
               </View>

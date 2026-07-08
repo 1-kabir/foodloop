@@ -61,8 +61,8 @@ export default function NGOSettingsScreen() {
   const { user, logout } = useAuthStore();
   const [notifications, setNotifications] = React.useState(true);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     router.replace('/(auth)');
   };
 

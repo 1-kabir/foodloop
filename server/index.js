@@ -6,6 +6,8 @@ require('dotenv').config();
 const matchRouter = require('./routes/match');
 const claimsRouter = require('./routes/claims');
 const geocodeRouter = require('./routes/geocode');
+const impactRouter = require('./routes/impact');
+const notifyRouter = require('./routes/notify');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -19,6 +21,8 @@ app.use(express.json());
 app.use('/api/match', matchRouter);
 app.use('/api/claims', claimsRouter);
 app.use('/api/geocode', geocodeRouter);
+app.use('/api/impact', impactRouter);
+app.use('/api/notify', notifyRouter);
 
 // Railway Health Check endpoint
 app.get('/', (req, res) => {

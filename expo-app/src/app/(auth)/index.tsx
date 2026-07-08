@@ -10,6 +10,7 @@ import {
   Platform,
   Image,
   ScrollView,
+  Alert,
 } from 'react-native';
 import Animated, {
   useAnimatedStyle,
@@ -78,13 +79,33 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const { login } = useAuthStore();
-
-  const handleSubmit = () => {
-    login(selectedType);
-  };
+  const [submitting, setSubmitting] = useState(false);
+  const { signIn, signUp } = useAuthStore();
 
   const isSignup = authMode === 'signup';
+
+  const handleSubmit = async () => {
+    if (!email.trim() || !password) {
+      Alert.alert('Missing details', 'Enter both an email and a password to continue.');
+      return;
+    }
+    if (isSignup && !name.trim()) {
+      Alert.alert('Missing details', selectedType === 'donor' ? 'Enter your business name.' : 'Enter your organisation name.');
+      return;
+    }
+
+    setSubmitting(true);
+    const result = isSignup
+      ? await signUp({ email: email.trim(), password, type: selectedType, name: name.trim() })
+      : await signIn({ email: email.trim(), password });
+    setSubmitting(false);
+
+    if (result.error) {
+      Alert.alert(isSignup ? 'Could not create account' : 'Could not log in', result.error);
+    }
+    // On success the root layout's auth-state effect takes over routing —
+    // no navigation call needed here.
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -189,8 +210,9 @@ export default function LoginScreen() {
 
             <View style={{ marginTop: spacing.s24 }}>
               <Button
-                label={isSignup ? 'Create Account' : 'Continue'}
+                label={submitting ? 'Please wait…' : isSignup ? 'Create Account' : 'Continue'}
                 onPress={handleSubmit}
+                disabled={submitting}
               />
             </View>
 

@@ -8,7 +8,12 @@
     "scheme": "expoapp",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "infoPlist": {
+        "NSCameraUsageDescription": "FoodLoop uses your camera to scan pickup QR codes and verify food collection.",
+        "NSPhotoLibraryUsageDescription": "FoodLoop uses your photo library so you can attach a photo to a food listing.",
+        "NSLocationWhenInUseUsageDescription": "FoodLoop uses your location to show nearby donors and NGOs on the map."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -17,7 +22,8 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": ["CAMERA", "ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"]
     },
     "web": {
       "output": "static",
@@ -31,6 +37,25 @@
           "backgroundColor": "#208AEF",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "FoodLoop uses your camera to scan pickup QR codes and verify food collection."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "FoodLoop uses your photo library so you can attach a photo to a food listing."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#3E9BD5"
         }
       ]
     ],

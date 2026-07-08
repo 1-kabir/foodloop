@@ -125,8 +125,11 @@ export default function DonorOnboardScreen() {
   const [name, setName] = useState('');
   const [orgType, setOrgType] = useState('Restaurant');
 
-  // Step 2
+  // Step 2 — geocoded eagerly (to validate the address) but only persisted
+  // to Supabase in the final combined write, so a partial exit never leaves
+  // half-written profile data behind.
   const [address, setAddress] = useState('');
+  const [coords, setCoords] = useState<{ lat: number; lng: number; displayName: string } | null>(null);
 
   // Step 3
   const [foodPrefs, setFoodPrefs] = useState<string[]>(['Cooked Meals']);
@@ -144,12 +147,8 @@ export default function DonorOnboardScreen() {
     } else if (step === 2) {
       setLoading(true);
       try {
-        const coords = await apiService.geocode(address);
-        updateUser({ 
-          address: coords.displayName || address,
-          lat: coords.lat,
-          lng: coords.lng 
-        });
+        const result = await apiService.geocode(address);
+        setCoords(result);
         setStep(3);
       } catch (err) {
         alert('Could not verify address location. Please check spelling or enter a nearby landmark.');
@@ -157,14 +156,28 @@ export default function DonorOnboardScreen() {
         setLoading(false);
       }
     } else {
-      if (name) updateUser({ name });
-      setOnboarded();
+      setLoading(true);
+      const result = await updateUser({
+        name,
+        orgType,
+        address: coords ? coords.displayName || address : address,
+        lat: coords?.lat ?? undefined,
+        lng: coords?.lng ?? undefined,
+        foodPrefs,
+      });
+      setLoading(false);
+
+      if (result.error) {
+        alert(`Could not save your profile: ${result.error}`);
+        return;
+      }
+      await setOnboarded();
     }
   };
 
-  const handleBack = () => {
+  const handleBack = async () => {
     if (step === 1) {
-      logout();
+      await logout();
       router.replace('/(auth)');
     } else {
       setStep((s) => s - 1);

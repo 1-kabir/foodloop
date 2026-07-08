@@ -1,37 +1,97 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, Dimensions, Pressable } from 'react-native';
-import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
-import { useListingStore } from '../../store/listingStore';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, Dimensions, Pressable, Platform } from 'react-native';
+import MapView, { Marker, UrlTile, PROVIDER_DEFAULT, PROVIDER_GOOGLE } from 'react-native-maps';
+import { supabase, UserRow } from '../../lib/supabase';
+import { useAuthStore } from '../../store/authStore';
+import { haversineKm } from '../../store/listingStore';
 import { colors, typography, radius, shadows, spacing } from '../../constants/theme';
 import { Users } from 'phosphor-react-native';
 
 const { width, height } = Dimensions.get('window');
 
-const MOCK_REGION = {
+// Fallback region used only if neither the donor's own address nor device
+// location is available yet — most of the time initialRegion below wins.
+const FALLBACK_REGION = {
   latitude: 22.5726,
   longitude: 88.3639,
   latitudeDelta: 0.05,
   longitudeDelta: 0.05,
 };
 
-const MOCK_NGOS = [
-  { id: '1', name: 'Hope Foundation', capacity: '50kg', distance: '1.2km', lat: 22.58, lng: 88.36 },
-  { id: '2', name: 'Feed The Need', capacity: '120kg', distance: '3.4km', lat: 22.56, lng: 88.38 },
-];
+interface NgoPin {
+  id: string;
+  name: string;
+  address: string | null;
+  capacityKg: number;
+  lat: number;
+  lng: number;
+  distanceKm: number | null;
+}
 
 export default function DonorMapScreen() {
+  const { user } = useAuthStore();
+  const [ngos, setNgos] = useState<NgoPin[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadNgos() {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('type', 'ngo')
+        .eq('verification_status', 'approved')
+        .not('lat', 'is', null)
+        .not('lng', 'is', null);
+
+      if (error || cancelled) return;
+
+      const pins = ((data ?? []) as UserRow[]).map((row) => ({
+        id: row.id,
+        name: row.name ?? 'Unnamed NGO',
+        address: row.address,
+        capacityKg: row.max_capacity_kg,
+        lat: row.lat as number,
+        lng: row.lng as number,
+        distanceKm:
+          user?.lat != null && user?.lng != null
+            ? haversineKm(user.lat, user.lng, row.lat as number, row.lng as number)
+            : null,
+      }));
+      setNgos(pins);
+    }
+
+    loadNgos();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.lat, user?.lng]);
+
+  const initialRegion =
+    user?.lat != null && user?.lng != null
+      ? { latitude: user.lat, longitude: user.lng, latitudeDelta: 0.08, longitudeDelta: 0.08 }
+      : FALLBACK_REGION;
+
+  const selected = ngos.find((n) => n.id === selectedId);
 
   return (
     <SafeAreaView style={styles.container}>
       <MapView
-        provider={PROVIDER_DEFAULT}
+        // Android's Google-backed provider needs an OSM raster overlay to
+        // actually show OpenStreetMap tiles (and to keep working without a
+        // paid Google Maps API key); iOS's Apple Maps base already renders
+        // fine on its own, so the overlay is skipped there.
+        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : PROVIDER_DEFAULT}
         style={styles.map}
-        initialRegion={MOCK_REGION}
+        initialRegion={initialRegion}
         showsUserLocation
         showsMyLocationButton
       >
-        {MOCK_NGOS.map((ngo) => (
+        {Platform.OS === 'android' && (
+          <UrlTile urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png" maximumZ={19} flipY={false} />
+        )}
+        {ngos.map((ngo) => (
           <Marker
             key={ngo.id}
             coordinate={{ latitude: ngo.lat, longitude: ngo.lng }}
@@ -46,28 +106,27 @@ export default function DonorMapScreen() {
 
       <View style={styles.controlsStrip}>
         <View style={styles.pillControl}>
-          <Text style={styles.pillText}>Verified NGOs Nearby</Text>
+          <Text style={styles.pillText}>{ngos.length} verified NGO{ngos.length === 1 ? '' : 's'} nearby</Text>
         </View>
       </View>
 
-      {selectedId && (
+      {selected && (
         <View style={styles.bottomSheet}>
           <View style={styles.sheetHandle} />
-          {MOCK_NGOS.filter(n => n.id === selectedId).map(ngo => (
-            <View key={ngo.id}>
-              <View style={styles.row}>
-                <Text style={styles.sheetTitle}>{ngo.name}</Text>
-                <View style={styles.verifiedBadge}>
-                  <Text style={styles.verifiedText}>Verified</Text>
-                </View>
-              </View>
-              <Text style={styles.sheetSubtitle}>Capacity: {ngo.capacity} • {ngo.distance}</Text>
-              
-              <Pressable style={styles.claimBtn}>
-                <Text style={styles.claimBtnText}>Message NGO</Text>
-              </Pressable>
+          <View style={styles.row}>
+            <Text style={styles.sheetTitle}>{selected.name}</Text>
+            <View style={styles.verifiedBadge}>
+              <Text style={styles.verifiedText}>Verified</Text>
             </View>
-          ))}
+          </View>
+          <Text style={styles.sheetSubtitle}>
+            Capacity: {selected.capacityKg}kg/day
+            {selected.distanceKm != null ? ` • ${selected.distanceKm.toFixed(1)} km` : ''}
+          </Text>
+
+          <Pressable style={styles.claimBtn} onPress={() => setSelectedId(null)}>
+            <Text style={styles.claimBtnText}>Close</Text>
+          </Pressable>
         </View>
       )}
     </SafeAreaView>

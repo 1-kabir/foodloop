@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -8,8 +8,10 @@ import {
   Pressable,
   Modal,
 } from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
 import { useAuthStore } from '../../store/authStore';
-import { useListingStore } from '../../store/listingStore';
+import { useListingStore, Listing } from '../../store/listingStore';
+import { useClaimStore } from '../../store/claimStore';
 import { colors, typography, spacing, radius, shadows } from '../../constants/theme';
 import { FoodCard } from '../../components/FoodCard';
 import { useRouter } from 'expo-router';
@@ -17,13 +19,28 @@ import { Plus, QrCode, X } from 'phosphor-react-native';
 
 export default function DonorListingsScreen() {
   const { user } = useAuthStore();
-  const { listings } = useListingStore();
+  const { listings, fetchListings, subscribeRealtime, unsubscribeRealtime } = useListingStore();
+  const { claims, fetchClaimsOnMyListings, subscribeRealtime: subscribeClaims, unsubscribeRealtime: unsubscribeClaims } = useClaimStore();
   const router = useRouter();
 
-  const myListings = listings.filter((l) => l.status !== 'expired');
+  useEffect(() => {
+    fetchListings();
+    fetchClaimsOnMyListings();
+    subscribeRealtime();
+    subscribeClaims('donor');
+    return () => {
+      unsubscribeRealtime();
+      unsubscribeClaims();
+    };
+  }, []);
+
+  const myListings = listings.filter((l) => l.donorId === user?.id && l.status !== 'expired');
 
   // QR Modal States
-  const [selectedListing, setSelectedListing] = useState<any>(null);
+  const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
+  const activeClaimForSelected = selectedListing
+    ? claims.find((c) => c.listingId === selectedListing.id && c.status === 'confirmed')
+    : undefined;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -42,20 +59,23 @@ export default function DonorListingsScreen() {
 
         {myListings.length > 0 ? (
           <View style={styles.list}>
-            {myListings.map((listing) => (
-              <Pressable 
-                key={listing.id} 
-                onPress={() => setSelectedListing(listing)}
-              >
-                <FoodCard listing={listing} />
-                {listing.status === 'claimed' && (
-                  <View style={styles.claimedBadgeRow}>
-                    <QrCode color={colors.blue500} size={16} />
-                    <Text style={styles.claimedBadgeText}>Tap to generate collection QR</Text>
-                  </View>
-                )}
-              </Pressable>
-            ))}
+            {myListings.map((listing) => {
+              const hasActiveClaim = claims.some((c) => c.listingId === listing.id && c.status === 'confirmed');
+              return (
+                <Pressable
+                  key={listing.id}
+                  onPress={() => hasActiveClaim && setSelectedListing(listing)}
+                >
+                  <FoodCard listing={listing} />
+                  {hasActiveClaim && (
+                    <View style={styles.claimedBadgeRow}>
+                      <QrCode color={colors.blue500} size={16} />
+                      <Text style={styles.claimedBadgeText}>Tap to generate collection QR</Text>
+                    </View>
+                  )}
+                </Pressable>
+              );
+            })}
           </View>
         ) : (
           <View style={styles.emptyState}>
@@ -88,23 +108,17 @@ export default function DonorListingsScreen() {
               <View style={styles.qrContent}>
                 <Text style={styles.qrFoodName}>{selectedListing.foodName}</Text>
                 <Text style={styles.qrClaimInfo}>
-                  Claimed by Hope NGO • {selectedListing.qty} kg
+                  {activeClaimForSelected
+                    ? `Claimed by ${activeClaimForSelected.ngoName} • ${activeClaimForSelected.qtyClaimedKg} kg`
+                    : `${selectedListing.qty} kg reserved`}
                 </Text>
 
-                {/* Mock QR graphic representation */}
                 <View style={styles.qrSquare}>
-                  {/* Outer Frame */}
-                  <View style={styles.qrGrid}>
-                    <View style={styles.qrMarker} />
-                    <View style={{ flex: 1 }} />
-                    <View style={styles.qrMarker} />
-                  </View>
-                  <View style={styles.qrDotsBlock} />
-                  <View style={styles.qrGrid}>
-                    <View style={styles.qrMarker} />
-                    <View style={{ flex: 1 }} />
-                    <View style={[styles.qrMarker, { backgroundColor: colors.blue400 }]} />
-                  </View>
+                  {activeClaimForSelected ? (
+                    <QRCode value={activeClaimForSelected.qrToken} size={168} color={colors.neutral900} backgroundColor={colors.white} />
+                  ) : (
+                    <Text style={styles.qrSub}>No active claim to verify yet.</Text>
+                  )}
                 </View>
 
                 <Text style={styles.qrSub}>
@@ -230,7 +244,8 @@ const styles = StyleSheet.create({
     borderColor: colors.neutral200,
     borderRadius: 12,
     padding: 16,
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: colors.white,
     marginBottom: 20,
   },

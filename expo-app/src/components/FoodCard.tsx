@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { colors, radius, typography } from '../constants/theme';
 import { Listing } from '../store/listingStore';
+import { StatusPill } from './ui/Badge';
 
 export const FoodCard: React.FC<{ listing: Listing }> = ({ listing }) => {
   const urgencyColor = listing.urgency === 'red' ? colors.red : listing.urgency === 'amber' ? colors.amber : colors.green;
@@ -11,7 +12,7 @@ export const FoodCard: React.FC<{ listing: Listing }> = ({ listing }) => {
       <View style={[styles.urgencyBar, { backgroundColor: urgencyColor }]} />
       <View style={styles.content}>
         <View style={styles.topRow}>
-          <Text style={styles.foodName}>{listing.foodName}</Text>
+          <Text style={styles.foodName} numberOfLines={1}>{listing.foodName}</Text>
           <View style={styles.categoryChip}>
             <Text style={styles.categoryText}>{listing.category}</Text>
           </View>
@@ -21,7 +22,7 @@ export const FoodCard: React.FC<{ listing: Listing }> = ({ listing }) => {
           <Text style={styles.donorName}>{listing.donorName}</Text>
         </View>
         <View style={styles.bottomRow}>
-          <Text style={styles.statusPill}>{listing.status.toUpperCase()}</Text>
+          <StatusPill status={listing.status} />
           <Text style={styles.meta}>{listing.distance} • {listing.timeRemaining}</Text>
         </View>
       </View>

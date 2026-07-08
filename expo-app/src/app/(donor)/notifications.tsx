@@ -1,35 +1,65 @@
-import React from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { colors, typography, spacing, radius } from '../../constants/theme';
 import { CaretLeft, Bell } from 'phosphor-react-native';
+import { useClaimStore } from '../../store/claimStore';
+import { useAuthStore } from '../../store/authStore';
 
-const NOTIFICATIONS = [
-  {
-    id: '1',
-    title: 'Donation Claimed',
-    message: 'Hope NGO claimed 15kg of Chicken Biryani.',
-    time: '2 hours ago',
-    unread: true,
-  },
-  {
-    id: '2',
-    title: 'Verification Complete',
-    message: 'Your business profile has been approved! Start listing surplus food.',
-    time: '1 day ago',
-    unread: false,
-  },
-  {
-    id: '3',
-    title: 'Welcome to FoodLoop',
-    message: 'Thanks for joining! Together we rescue food and feed communities.',
-    time: '2 days ago',
-    unread: false,
-  },
-];
+function timeAgo(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(ms / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
 
+// Real activity feed derived from claims on this donor's listings — no
+// separate notifications table needed, and it can never drift out of sync
+// with what actually happened.
 export default function NotificationsScreen() {
   const router = useRouter();
+  const { user } = useAuthStore();
+  const { claims, fetchClaimsOnMyListings } = useClaimStore();
+
+  useEffect(() => {
+    fetchClaimsOnMyListings();
+  }, []);
+
+  const items = useMemo(() => {
+    const entries: { id: string; title: string; message: string; time: string; unread: boolean }[] = [];
+    for (const c of claims) {
+      entries.push({
+        id: `${c.id}-claimed`,
+        title: 'Donation Claimed',
+        message: `${c.ngoName} claimed ${c.qtyClaimedKg}kg of ${c.foodName}.`,
+        time: c.createdAt,
+        unread: c.status === 'confirmed',
+      });
+      if (c.status === 'completed' && c.completedAt) {
+        entries.push({
+          id: `${c.id}-completed`,
+          title: 'Pickup Verified',
+          message: `${c.foodName} (${c.qtyClaimedKg}kg) was picked up by ${c.ngoName}.`,
+          time: c.completedAt,
+          unread: false,
+        });
+      }
+    }
+    if (user?.createdAt) {
+      entries.push({
+        id: 'welcome',
+        title: 'Welcome to FoodLoop',
+        message: "Thanks for joining! Together we rescue food and feed communities.",
+        time: user.createdAt,
+        unread: false,
+      });
+    }
+    return entries.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+  }, [claims, user?.createdAt]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -42,7 +72,10 @@ export default function NotificationsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {NOTIFICATIONS.map(n => (
+        {items.length === 0 && (
+          <Text style={styles.notifMessage}>Nothing yet — activity on your listings will show up here.</Text>
+        )}
+        {items.map(n => (
           <View key={n.id} style={[styles.notifCard, n.unread && styles.notifCardUnread]}>
             <View style={styles.iconCol}>
               <Bell color={n.unread ? colors.blue500 : colors.neutral400} size={20} weight={n.unread ? 'fill' : 'regular'} />
@@ -50,7 +83,7 @@ export default function NotificationsScreen() {
             <View style={styles.textCol}>
               <View style={styles.titleRow}>
                 <Text style={styles.notifTitle}>{n.title}</Text>
-                <Text style={styles.notifTime}>{n.time}</Text>
+                <Text style={styles.notifTime}>{timeAgo(n.time)}</Text>
               </View>
               <Text style={styles.notifMessage}>{n.message}</Text>
             </View>

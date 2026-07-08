@@ -1,24 +1,93 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, Pressable, TextInput, ScrollView } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, Pressable, TextInput, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useListingStore } from '../../store/listingStore';
+import { useAuthStore } from '../../store/authStore';
+import { api } from '../../lib/api';
 import { colors, typography, spacing, radius } from '../../constants/theme';
 import { Button } from '../../components/ui/Button';
 import { CaretLeft } from 'phosphor-react-native';
 
+// "16:30" -> today at 16:30 local time, as ISO. Rolls to tomorrow if that
+// time has already passed today.
+function timeStringToIso(time: string): string {
+  const [hours, minutes] = time.split(':').map((n) => parseInt(n, 10));
+  const d = new Date();
+  d.setHours(hours || 0, minutes || 0, 0, 0);
+  if (d.getTime() < Date.now()) d.setDate(d.getDate() + 1);
+  return d.toISOString();
+}
+
+function formatWindowTime(iso: string | null): string {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
 export default function ClaimSheetScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { listings, claimListing } = useListingStore();
-  
-  const listing = listings.find(l => l.id === id);
-  const [claimQty, setClaimQty] = useState(listing ? listing.qty : 0);
+  const { user } = useAuthStore();
+  const { listings, fetchListings, claimListing } = useListingStore();
+  const [claimQty, setClaimQty] = useState(1);
   const [pickupTime, setPickupTime] = useState('16:30');
+  const [submitting, setSubmitting] = useState(false);
+  const [initialized, setInitialized] = useState(listings.length > 0);
 
-  if (!listing) return null;
+  const listing = listings.find((l) => l.id === id);
 
-  const handleClaim = () => {
-    claimListing(listing.id);
+  useEffect(() => {
+    if (listings.length === 0) {
+      fetchListings().then(() => setInitialized(true));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (listing) setClaimQty(Math.min(listing.qty, Math.max(1, claimQty)));
+  }, [listing?.qty]);
+
+  if (!listing) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <Pressable onPress={() => router.back()} style={styles.backBtn}>
+            <CaretLeft color={colors.neutral900} size={24} weight="bold" />
+          </Pressable>
+          <Text style={styles.headerTitle}>Claim Food</Text>
+          <View style={{ width: 24 }} />
+        </View>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+          {!initialized ? (
+            <ActivityIndicator color={colors.blue400} />
+          ) : (
+            <Text style={{ fontFamily: typography.fonts.medium, color: colors.neutral400 }}>
+              This listing is no longer available.
+            </Text>
+          )}
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const handleClaim = async () => {
+    setSubmitting(true);
+    const result = await claimListing(listing.id, claimQty, timeStringToIso(pickupTime));
+    setSubmitting(false);
+
+    if (result.error) {
+      Alert.alert('Could not claim this listing', result.error);
+      return;
+    }
+
+    // Best-effort — the claim itself already succeeded, so a failed push
+    // notification shouldn't surface as an error to the NGO.
+    api.post('/api/notify/send', {
+      userId: listing.donorId,
+      title: 'Your donation was claimed',
+      body: `${user?.name ?? 'An NGO'} claimed ${claimQty}kg of ${listing.foodName}.`,
+      data: { type: 'claim_confirmed', listingId: listing.id },
+    }).catch(() => {});
+
+    Alert.alert('Claim confirmed', `You've reserved ${claimQty}kg of ${listing.foodName}. Find it in your Schedule.`);
     router.back();
   };
 
@@ -72,11 +141,17 @@ export default function ClaimSheetScreen() {
             </Pressable>
           ))}
         </View>
-        <Text style={styles.timeNote}>Donor window: 14:00 - 18:00</Text>
+        <Text style={styles.timeNote}>
+          Donor window: {formatWindowTime(listing.pickupWindowStart)} - {formatWindowTime(listing.pickupWindowEnd)}
+        </Text>
 
         <View style={styles.spacer} />
 
-        <Button label={`Confirm Claim (${claimQty} kg)`} onPress={handleClaim} />
+        <Button
+          label={submitting ? 'Confirming…' : `Confirm Claim (${claimQty} kg)`}
+          onPress={handleClaim}
+          disabled={submitting}
+        />
       </ScrollView>
     </SafeAreaView>
   );

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
@@ -105,13 +105,20 @@ const rowStyles = StyleSheet.create({
 
 export default function DonorDashboard() {
   const { user } = useAuthStore();
-  const { listings } = useListingStore();
+  const { listings, fetchListings, subscribeRealtime, unsubscribeRealtime } = useListingStore();
   const router = useRouter();
 
-  const myListings = listings.filter((l) => l.status !== 'expired').slice(0, 3);
-  const totalKg = listings.reduce((sum, l) => sum + l.qty, 0);
-  const activeCount = listings.filter((l) => l.status === 'available').length;
-  const claimedCount = listings.filter((l) => l.status === 'claimed').length;
+  useEffect(() => {
+    fetchListings();
+    subscribeRealtime();
+    return () => unsubscribeRealtime();
+  }, []);
+
+  const myAllListings = listings.filter((l) => l.donorId === user?.id);
+  const myListings = myAllListings.filter((l) => l.status !== 'expired').slice(0, 3);
+  const totalKg = myAllListings.reduce((sum, l) => sum + l.totalQty, 0);
+  const activeCount = myAllListings.filter((l) => l.status === 'available').length;
+  const claimedCount = myAllListings.filter((l) => l.status === 'partial' || l.status === 'fully_claimed').length;
 
   return (
     <SafeAreaView style={styles.container}>

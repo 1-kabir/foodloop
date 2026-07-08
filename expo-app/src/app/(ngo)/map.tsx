@@ -1,48 +1,68 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, Dimensions, Pressable } from 'react-native';
-import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, Dimensions, Pressable, Platform } from 'react-native';
+import MapView, { Marker, UrlTile, PROVIDER_DEFAULT, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useListingStore } from '../../store/listingStore';
+import { useAuthStore } from '../../store/authStore';
 import { colors, typography, radius, shadows, spacing } from '../../constants/theme';
 import { ForkKnife } from 'phosphor-react-native';
 import { useRouter } from 'expo-router';
 
 const { width, height } = Dimensions.get('window');
 
-// Map center around a mock coordinate
-const MOCK_REGION = {
+// Fallback region used only until the NGO's own geocoded address (or a real
+// listing pin) gives us something better to center on.
+const FALLBACK_REGION = {
   latitude: 22.5726,
-  longitude: 88.3639, // Kolkata coords based on user's location
+  longitude: 88.3639,
   latitudeDelta: 0.05,
   longitudeDelta: 0.05,
 };
 
 export default function NGOMapScreen() {
   const router = useRouter();
-  const { listings } = useListingStore();
-  const availableFood = listings.filter(l => l.status === 'available');
-
+  const { user } = useAuthStore();
+  const { listings, fetchListings, subscribeRealtime, unsubscribeRealtime } = useListingStore();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchListings();
+    subscribeRealtime();
+    return () => unsubscribeRealtime();
+  }, []);
+
+  // 'partial' listings still have qty left — they belong on the map too,
+  // only 'fully_claimed' / 'collected' / 'expired' should disappear from it.
+  const availableFood = listings.filter(
+    (l) => (l.status === 'available' || l.status === 'partial') && l.lat != null && l.lng != null
+  );
+
+  const initialRegion =
+    user?.lat != null && user?.lng != null
+      ? { latitude: user.lat, longitude: user.lng, latitudeDelta: 0.08, longitudeDelta: 0.08 }
+      : FALLBACK_REGION;
+
+  const selectedListing = availableFood.find((l) => l.id === selectedId);
 
   return (
     <SafeAreaView style={styles.container}>
       <MapView
-        provider={PROVIDER_DEFAULT}
+        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : PROVIDER_DEFAULT}
         style={styles.map}
-        initialRegion={MOCK_REGION}
+        initialRegion={initialRegion}
         showsUserLocation
         showsMyLocationButton
       >
-        {availableFood.map((listing, index) => {
-          // generate slight offsets for mock markers
-          const lat = MOCK_REGION.latitude + (index * 0.01) - 0.015;
-          const lng = MOCK_REGION.longitude + (index * 0.01) - 0.005;
-
-          const urgencyColor = listing.urgency === 'red' ? colors.red : listing.urgency === 'amber' ? colors.amber : colors.green;
+        {Platform.OS === 'android' && (
+          <UrlTile urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png" maximumZ={19} flipY={false} />
+        )}
+        {availableFood.map((listing) => {
+          const urgencyColor =
+            listing.urgency === 'red' ? colors.red : listing.urgency === 'amber' ? colors.amber : colors.green;
 
           return (
             <Marker
               key={listing.id}
-              coordinate={{ latitude: lat, longitude: lng }}
+              coordinate={{ latitude: listing.lat as number, longitude: listing.lng as number }}
               onPress={() => setSelectedId(listing.id)}
             >
               <View style={[styles.pin, { backgroundColor: urgencyColor }]}>
@@ -55,25 +75,23 @@ export default function NGOMapScreen() {
 
       <View style={styles.controlsStrip}>
         <View style={styles.pillControl}>
-          <Text style={styles.pillText}>{availableFood.length} donations nearby</Text>
+          <Text style={styles.pillText}>{availableFood.length} donation{availableFood.length === 1 ? '' : 's'} nearby</Text>
         </View>
       </View>
 
-      {selectedId && (
+      {selectedListing && (
         <View style={styles.bottomSheet}>
           <View style={styles.sheetHandle} />
-          {availableFood.filter(l => l.id === selectedId).map(listing => (
-            <View key={listing.id}>
-              <Text style={styles.sheetTitle}>{listing.foodName}</Text>
-              <Text style={styles.sheetSubtitle}>{listing.qty} kg • {listing.distance}</Text>
-              <Pressable 
-                style={styles.claimBtn}
-                onPress={() => router.push(`/(ngo)/claim-sheet?id=${listing.id}` as any)}
-              >
-                <Text style={styles.claimBtnText}>View Details</Text>
-              </Pressable>
-            </View>
-          ))}
+          <Text style={styles.sheetTitle}>{selectedListing.foodName}</Text>
+          <Text style={styles.sheetSubtitle}>
+            {selectedListing.qty} kg • {selectedListing.distance} • {selectedListing.donorName}
+          </Text>
+          <Pressable
+            style={styles.claimBtn}
+            onPress={() => router.push(`/(ngo)/claim-sheet?id=${selectedListing.id}` as any)}
+          >
+            <Text style={styles.claimBtnText}>View Details</Text>
+          </Pressable>
         </View>
       )}
     </SafeAreaView>

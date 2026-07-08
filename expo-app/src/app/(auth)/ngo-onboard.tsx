@@ -19,6 +19,10 @@ import { colors, typography, spacing, radius } from '../../constants/theme';
 
 const TOTAL_STEPS = 3;
 const DIET_PREFS = ['Vegetarian', 'Non-Vegetarian', 'Both'];
+// Mirrors the categories a donor can list under (see list-food.tsx CATEGORIES)
+// — this is what server/routes/match.js compares against a listing's
+// category when scoring preference match for the Smart Match engine.
+const FOOD_CATEGORIES = ['Cooked Meals', 'Raw Produce', 'Packaged Goods', 'Beverages', 'Bakery'];
 
 function ProgressLine({ step }: { step: number }) {
   const progress = (step / TOTAL_STEPS) * 100;
@@ -45,20 +49,26 @@ function ChipSelector({
   options,
   selected,
   onSelect,
+  onToggle,
+  multi = false,
 }: {
   options: string[];
-  selected: string;
-  onSelect: (val: string) => void;
+  selected: string | string[];
+  onSelect?: (val: string) => void;
+  onToggle?: (val: string) => void;
+  multi?: boolean;
 }) {
+  const isActive = (val: string) => (multi ? (selected as string[]).includes(val) : selected === val);
+
   return (
     <View style={chipStyles.container}>
       {options.map((opt) => {
-        const active = selected === opt;
+        const active = isActive(opt);
         return (
           <Pressable
             key={opt}
+            onPress={() => (multi ? onToggle?.(opt) : onSelect?.(opt))}
             style={[chipStyles.chip, active && chipStyles.chipActive]}
-            onPress={() => onSelect(opt)}
           >
             <Text style={[chipStyles.text, active && chipStyles.textActive]}>{opt}</Text>
           </Pressable>
@@ -169,12 +179,23 @@ export default function NGOOnboardScreen() {
   const [orgName, setOrgName] = useState('');
   const [regNumber, setRegNumber] = useState('');
 
-  // Step 2
+  // Step 2 — geocoded eagerly to validate the address, persisted only in the
+  // final combined write.
   const [address, setAddress] = useState('');
+  const [coords, setCoords] = useState<{ lat: number; lng: number; displayName: string } | null>(null);
 
+  // Step 3 — dietPref is a display-only constraint; foodPrefs (categories)
+  // is what server/routes/match.js actually scores against a listing's
+  // category, so it has to be collected here or Smart Match preference
+  // scoring silently does nothing for every NGO.
   const [dietPref, setDietPref] = useState('Both');
+  const [foodPrefs, setFoodPrefs] = useState<string[]>(['Cooked Meals', 'Raw Produce', 'Packaged Goods', 'Bakery']);
   const [capacity, setCapacity] = useState(50);
   const [loading, setLoading] = useState(false);
+
+  const toggleFoodPref = (val: string) => {
+    setFoodPrefs((prev) => (prev.includes(val) ? prev.filter((v) => v !== val) : [...prev, val]));
+  };
 
   const handleNext = async () => {
     if (step === 1) {
@@ -182,12 +203,8 @@ export default function NGOOnboardScreen() {
     } else if (step === 2) {
       setLoading(true);
       try {
-        const coords = await apiService.geocode(address);
-        updateUser({
-          address: coords.displayName || address,
-          lat: coords.lat,
-          lng: coords.lng
-        });
+        const result = await apiService.geocode(address);
+        setCoords(result);
         setStep(3);
       } catch (err) {
         alert('Could not verify address location. Please check spelling or enter a nearby landmark.');
@@ -195,14 +212,30 @@ export default function NGOOnboardScreen() {
         setLoading(false);
       }
     } else {
-      if (orgName) updateUser({ name: orgName });
-      setOnboarded();
+      setLoading(true);
+      const result = await updateUser({
+        name: orgName,
+        registrationNumber: regNumber,
+        address: coords ? coords.displayName || address : address,
+        lat: coords?.lat ?? undefined,
+        lng: coords?.lng ?? undefined,
+        dietPref,
+        foodPrefs,
+        maxCapacityKg: capacity,
+      });
+      setLoading(false);
+
+      if (result.error) {
+        alert(`Could not save your profile: ${result.error}`);
+        return;
+      }
+      await setOnboarded();
     }
   };
 
-  const handleBack = () => {
+  const handleBack = async () => {
     if (step === 1) {
-      logout();
+      await logout();
       router.replace('/(auth)');
     } else {
       setStep((s) => s - 1);
@@ -312,12 +345,23 @@ export default function NGOOnboardScreen() {
                 This helps match you with the right donors automatically.
               </Text>
 
-              <Text style={styles.fieldLabel}>Food Preference</Text>
-              <View style={{ marginBottom: 32 }}>
+              <Text style={styles.fieldLabel}>Dietary Preference</Text>
+              <View style={{ marginBottom: 28 }}>
                 <ChipSelector
                   options={DIET_PREFS}
                   selected={dietPref}
                   onSelect={setDietPref}
+                />
+              </View>
+
+              <Text style={styles.fieldLabel}>Food Categories You Can Accept</Text>
+              <Text style={styles.subtitle}>Used to match you with the right donors automatically.</Text>
+              <View style={{ marginBottom: 28, marginTop: -16 }}>
+                <ChipSelector
+                  options={FOOD_CATEGORIES}
+                  selected={foodPrefs}
+                  onToggle={toggleFoodPref}
+                  multi
                 />
               </View>
 

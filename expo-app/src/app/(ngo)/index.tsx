@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView } from 'react-native';
 import { useAuthStore } from '../../store/authStore';
 import { useListingStore } from '../../store/listingStore';
 import { colors, typography, spacing, radius } from '../../constants/theme';
 import { FoodCard } from '../../components/FoodCard';
+import { apiService, ImpactStats } from '../../lib/api';
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -14,9 +15,24 @@ function getGreeting(): string {
 
 export default function NGODashboard() {
   const { user } = useAuthStore();
-  const { listings } = useListingStore();
-  
-  const availableFood = listings.filter(l => l.status === 'available');
+  const { listings, fetchListings, subscribeRealtime, unsubscribeRealtime } = useListingStore();
+  const [stats, setStats] = useState<ImpactStats | null>(null);
+
+  useEffect(() => {
+    fetchListings();
+    subscribeRealtime();
+    return () => unsubscribeRealtime();
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    apiService.getImpact(user.id).then(setStats).catch(() => setStats(null));
+  }, [user?.id]);
+
+  // 'partial' listings still have qty remaining and are still claimable.
+  const availableFood = listings
+    .filter((l) => l.status === 'available' || l.status === 'partial')
+    .sort((a, b) => new Date(a.expiryAt).getTime() - new Date(b.expiryAt).getTime());
 
   return (
     <SafeAreaView style={styles.container}>
@@ -37,11 +53,11 @@ export default function NGODashboard() {
         <View style={styles.statStrip}>
           <View style={[styles.statBox, { flex: 2.2 }]}>
             <Text style={styles.statLabel}>Total Collected</Text>
-            <Text style={styles.statValue}>124 kg</Text>
+            <Text style={styles.statValue}>{stats?.totalKg ?? 0} kg</Text>
           </View>
           <View style={[styles.statBox, { flex: 1.4 }]}>
             <Text style={styles.statLabel}>Meals</Text>
-            <Text style={styles.statValue}>372</Text>
+            <Text style={styles.statValue}>{stats?.mealsEnabled ?? 0}</Text>
           </View>
         </View>
 

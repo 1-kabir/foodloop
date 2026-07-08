@@ -56,8 +56,8 @@ export default function VerifyScreen() {
 
   const allUploaded = DOC_TYPES.every((d) => uploaded[d.key]);
 
-  const handleSubmit = () => {
-    submitVerification();
+  const handleSubmit = async () => {
+    await submitVerification();
     setVerifyState('submitted');
   };
 
