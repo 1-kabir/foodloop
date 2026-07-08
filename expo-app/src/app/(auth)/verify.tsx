@@ -154,17 +154,13 @@ export default function VerifyScreen() {
             />
           </View>
 
-          {/* Demo auto-approval banner */}
+          {/* Auto-approval countdown */}
           {!approved && (
             <View style={styles.demoCard}>
               <View style={styles.demoCardHeader}>
                 <Lightning color={colors.amber} size={16} weight="fill" />
-                <Text style={styles.demoCardTitle}>DEMO MODE</Text>
+                <Text style={styles.demoCardTitle}>Auto-approving in <Text style={styles.demoCountdown}>{secondsLeft}s</Text></Text>
               </View>
-              <Text style={styles.demoCardBody}>
-                Auto-approving your account in{' '}
-                <Text style={styles.demoCountdown}>{secondsLeft}s</Text>
-              </Text>
 
               {/* Progress bar */}
               <View style={styles.progressTrack}>
@@ -491,10 +487,9 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   demoCardTitle: {
-    fontFamily: typography.fonts.semiBold,
-    fontSize: 11,
-    color: colors.amber,
-    letterSpacing: 0.8,
+    fontFamily: typography.fonts.regular,
+    fontSize: typography.size.sm.fontSize,
+    color: colors.neutral600,
   },
   demoCardBody: {
     fontFamily: typography.fonts.regular,

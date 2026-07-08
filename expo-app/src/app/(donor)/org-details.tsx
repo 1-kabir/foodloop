@@ -5,6 +5,7 @@ import { useAuthStore } from '../../store/authStore';
 import { useToastStore } from '../../store/toastStore';
 import { colors, typography, spacing, radius } from '../../constants/theme';
 import { Button } from '../../components/ui/Button';
+import { ScreenTransition } from '../../components/ui/ScreenTransition';
 import { CaretLeft } from 'phosphor-react-native';
 
 const CATEGORIES = ['Restaurant', 'Hotel', 'Caterer', 'Household', 'Other'];
@@ -30,7 +31,8 @@ export default function OrgDetailsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ScreenTransition>
+      <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
           <CaretLeft color={colors.neutral900} size={22} weight="bold" />
@@ -58,6 +60,7 @@ export default function OrgDetailsScreen() {
         </View>
       </ScrollView>
     </SafeAreaView>
+    </ScreenTransition>
   );
 }
 
