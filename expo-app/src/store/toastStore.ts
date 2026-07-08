@@ -11,7 +11,7 @@ interface ToastState {
 }
 
 export const useToastStore = create<ToastState>((set) => {
-  let timeoutId: NodeJS.Timeout | null = null;
+  let timeoutId: any = null;
 
   return {
     visible: false,

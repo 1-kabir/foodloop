@@ -10,7 +10,6 @@ import {
   Platform,
   Image,
   ScrollView,
-  Alert,
 } from 'react-native';
 import Animated, {
   useAnimatedStyle,
@@ -20,6 +19,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { useAuthStore } from '../../store/authStore';
+import { useToastStore } from '../../store/toastStore';
 import { colors, typography, spacing, radius } from '../../constants/theme';
 import { Button } from '../../components/ui/Button';
 
@@ -84,27 +84,42 @@ export default function LoginScreen() {
 
   const isSignup = authMode === 'signup';
 
+  const { showToast } = useToastStore();
+
   const handleSubmit = async () => {
-    if (!email.trim() || !password) {
-      Alert.alert('Missing details', 'Enter both an email and a password to continue.');
+    const trimmedEmail = email.trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!trimmedEmail || !password) {
+      showToast('Enter both an email and a password to continue.', 'error');
+      return;
+    }
+    if (!emailRegex.test(trimmedEmail)) {
+      showToast('Please enter a valid email address.', 'error');
+      return;
+    }
+    if (password.length < 6) {
+      showToast('Password must be at least 6 characters long.', 'error');
       return;
     }
     if (isSignup && !name.trim()) {
-      Alert.alert('Missing details', selectedType === 'donor' ? 'Enter your business name.' : 'Enter your organisation name.');
+      showToast(selectedType === 'donor' ? 'Enter your business name.' : 'Enter your organisation name.', 'error');
       return;
     }
 
     setSubmitting(true);
     const result = isSignup
-      ? await signUp({ email: email.trim(), password, type: selectedType, name: name.trim() })
-      : await signIn({ email: email.trim(), password });
+      ? await signUp({ email: trimmedEmail, password, type: selectedType, name: name.trim() })
+      : await signIn({ email: trimmedEmail, password });
     setSubmitting(false);
 
     if (result.error) {
-      Alert.alert(isSignup ? 'Could not create account' : 'Could not log in', result.error);
+      showToast(result.error, 'error');
+    } else if (isSignup) {
+      showToast('Account created successfully! Let\'s setup onboarding.', 'success');
+    } else {
+      showToast('Welcome back to FoodLoop!', 'success');
     }
-    // On success the root layout's auth-state effect takes over routing —
-    // no navigation call needed here.
   };
 
   return (
