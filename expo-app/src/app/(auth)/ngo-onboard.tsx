@@ -10,11 +10,12 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { useAuthStore } from '../../store/authStore';
-import { colors, typography, spacing, radius } from '../../constants/theme';
 import { Button } from '../../components/ui/Button';
 import { ShieldCheck, CaretLeft } from 'phosphor-react-native';
 import { useRouter } from 'expo-router';
+import { apiService } from '../../lib/api';
+import { useAuthStore } from '../../store/authStore';
+import { colors, typography, spacing, radius } from '../../constants/theme';
 
 const TOTAL_STEPS = 3;
 const DIET_PREFS = ['Vegetarian', 'Non-Vegetarian', 'Both'];
@@ -171,13 +172,28 @@ export default function NGOOnboardScreen() {
   // Step 2
   const [address, setAddress] = useState('');
 
-  // Step 3
   const [dietPref, setDietPref] = useState('Both');
   const [capacity, setCapacity] = useState(50);
+  const [loading, setLoading] = useState(false);
 
-  const handleNext = () => {
-    if (step < TOTAL_STEPS) {
-      setStep((s) => s + 1);
+  const handleNext = async () => {
+    if (step === 1) {
+      setStep(2);
+    } else if (step === 2) {
+      setLoading(true);
+      try {
+        const coords = await apiService.geocode(address);
+        updateUser({
+          address: coords.displayName || address,
+          lat: coords.lat,
+          lng: coords.lng
+        });
+        setStep(3);
+      } catch (err) {
+        alert('Could not verify address location. Please check spelling or enter a nearby landmark.');
+      } finally {
+        setLoading(false);
+      }
     } else {
       if (orgName) updateUser({ name: orgName });
       setOnboarded();
@@ -311,11 +327,11 @@ export default function NGOOnboardScreen() {
           )}
 
           <View style={styles.actions}>
-            <View style={styles.nextBtnFull}>
+            <View style={step > 1 ? styles.nextBtnPartial : styles.nextBtnFull}>
               <Button
-                label={step === TOTAL_STEPS ? 'Complete Setup' : 'Continue'}
+                label={loading ? 'Verifying...' : step === TOTAL_STEPS ? 'Complete Setup' : 'Continue'}
                 onPress={handleNext}
-                disabled={!canProceed}
+                disabled={!canProceed || loading}
               />
             </View>
           </View>

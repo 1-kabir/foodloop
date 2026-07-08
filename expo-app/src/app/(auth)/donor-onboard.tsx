@@ -9,6 +9,7 @@ import {
   Pressable,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { CaretLeft } from 'phosphor-react-native';
@@ -22,6 +23,7 @@ import Animated, {
 import { useAuthStore } from '../../store/authStore';
 import { colors, typography, spacing, radius } from '../../constants/theme';
 import { Button } from '../../components/ui/Button';
+import { apiService } from '../../lib/api';
 
 const TOTAL_STEPS = 3;
 
@@ -128,6 +130,7 @@ export default function DonorOnboardScreen() {
 
   // Step 3
   const [foodPrefs, setFoodPrefs] = useState<string[]>(['Cooked Meals']);
+  const [loading, setLoading] = useState(false);
 
   const toggleFoodPref = (val: string) => {
     setFoodPrefs((prev) =>
@@ -135,9 +138,24 @@ export default function DonorOnboardScreen() {
     );
   };
 
-  const handleNext = () => {
-    if (step < TOTAL_STEPS) {
-      setStep((s) => s + 1);
+  const handleNext = async () => {
+    if (step === 1) {
+      setStep(2);
+    } else if (step === 2) {
+      setLoading(true);
+      try {
+        const coords = await apiService.geocode(address);
+        updateUser({ 
+          address: coords.displayName || address,
+          lat: coords.lat,
+          lng: coords.lng 
+        });
+        setStep(3);
+      } catch (err) {
+        alert('Could not verify address location. Please check spelling or enter a nearby landmark.');
+      } finally {
+        setLoading(false);
+      }
     } else {
       if (name) updateUser({ name });
       setOnboarded();
@@ -249,11 +267,11 @@ export default function DonorOnboardScreen() {
           )}
 
           <View style={styles.actions}>
-            <View style={styles.nextBtnFull}>
+            <View style={step > 1 ? styles.nextBtnPartial : styles.nextBtnFull}>
               <Button
-                label={step === TOTAL_STEPS ? 'Complete Setup' : 'Continue'}
+                label={loading ? 'Verifying...' : step === TOTAL_STEPS ? 'Complete Setup' : 'Continue'}
                 onPress={handleNext}
-                disabled={!canProceed}
+                disabled={!canProceed || loading}
               />
             </View>
           </View>
