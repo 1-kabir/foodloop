@@ -65,6 +65,8 @@ export default function NGOLayout() {
       <Tabs.Screen name="map" options={{ href: null }} />
       <Tabs.Screen name="claim-sheet" options={{ href: null }} />
       <Tabs.Screen name="profile" options={{ href: null }} />
+      <Tabs.Screen name="edit-profile" options={{ href: null }} />
+      <Tabs.Screen name="org-details" options={{ href: null }} />
     </Tabs>
   );
 }

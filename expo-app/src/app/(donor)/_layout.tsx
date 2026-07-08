@@ -67,6 +67,8 @@ export default function DonorLayout() {
       <Tabs.Screen name="donations" options={{ href: null }} />
       <Tabs.Screen name="list-food" options={{ href: null }} />
       <Tabs.Screen name="profile" options={{ href: null }} />
+      <Tabs.Screen name="edit-profile" options={{ href: null }} />
+      <Tabs.Screen name="org-details" options={{ href: null }} />
     </Tabs>
   );
 }
