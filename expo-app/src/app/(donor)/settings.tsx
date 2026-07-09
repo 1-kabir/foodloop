@@ -59,8 +59,14 @@ function SettingsRow({
 
 export default function DonorSettingsScreen() {
   const router = useRouter();
-  const { user, logout } = useAuthStore();
+  const { user, session, logout } = useAuthStore();
   const [notifications, setNotifications] = React.useState(true);
+
+  // `user.verified` tracks NGO/business admin approval (kept in sync with
+  // verification_status), not email confirmation — those are two different
+  // things. The actual "did they click the confirmation link" answer lives
+  // on the auth session itself.
+  const emailConfirmed = !!session?.user?.email_confirmed_at;
 
   const handleLogout = async () => {
     await logout();
@@ -91,12 +97,12 @@ export default function DonorSettingsScreen() {
             <Text style={styles.profileName}>{user?.name}</Text>
             <Text style={styles.profileEmail}>{user?.email}</Text>
             <View style={styles.verifyBadgeRow}>
-              <View style={[styles.verifyStatusIndicator, { backgroundColor: user?.verified ? colors.green : colors.amber }]} />
-              <Text style={[styles.verifyStatusText, { color: user?.verified ? colors.green : colors.amber }]}>
-                {user?.verified ? 'Email Verified ✓' : 'Email Pending Verification'}
+              <View style={[styles.verifyStatusIndicator, { backgroundColor: emailConfirmed ? colors.green : colors.amber }]} />
+              <Text style={[styles.verifyStatusText, { color: emailConfirmed ? colors.green : colors.amber }]}>
+                {emailConfirmed ? 'Email Verified ✓' : 'Email Pending Verification'}
               </Text>
             </View>
-            {!user?.verified && (
+            {!emailConfirmed && (
               <Pressable 
                 onPress={async () => {
                   const { error } = await useAuthStore.getState().resendConfirmationEmail();

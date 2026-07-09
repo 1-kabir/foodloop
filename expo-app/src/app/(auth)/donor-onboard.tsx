@@ -170,7 +170,7 @@ export default function DonorOnboardScreen() {
       setLoading(false);
 
       if (result.error) {
-        alert(`Could not save your profile: ${result.error}`);
+        showToast(`Could not save your profile: ${result.error}`, 'error');
         return;
       }
       await setOnboarded();

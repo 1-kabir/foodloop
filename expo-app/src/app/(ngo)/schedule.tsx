@@ -221,6 +221,10 @@ export default function NGOScheduleScreen() {
                       {new Date(claim.pickupTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </Text>
                     <ClaimCard claim={claim} />
+                    <Pressable style={styles.scanBtn} onPress={openScanner}>
+                      <Camera color={colors.white} size={18} weight="bold" />
+                      <Text style={styles.scanBtnText}>Verify Collection</Text>
+                    </Pressable>
                   </View>
                 </View>
               ))}

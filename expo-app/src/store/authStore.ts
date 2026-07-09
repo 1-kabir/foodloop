@@ -155,16 +155,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return { needsEmailVerification: true };
     }
 
-    // Email confirmation is disabled — create the profile row immediately.
-    const { data: profileRow, error: profileError } = await supabase
-      .from('users')
-      .insert({ id: data.user.id, email, type, name })
-      .select()
-      .single();
+    // Email confirmation is disabled, so we already have a live session.
+    // The on_auth_user_created trigger (server/migrations/002_*.sql) fires
+    // synchronously inside the same insert that created this auth user, so
+    // the matching public.users row already exists by the time we get here
+    // — fetch it rather than inserting again, which would always fail with
+    // a duplicate primary key.
+    const profile = await fetchProfile(data.user.id);
+    if (!profile) return { error: 'Account created but profile could not be loaded. Please try logging in.' };
 
-    if (profileError) return { error: profileError.message };
-
-    set({ session: data.session, user: rowToUser(profileRow as UserRow) });
+    set({ session: data.session, user: rowToUser(profile) });
     return {};
   },
 
